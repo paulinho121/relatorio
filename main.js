@@ -51,7 +51,6 @@ class NfeReportGenerator extends HTMLElement {
                 .summary p strong { font-weight: 600; }
                 .filial-summary { margin-top: 1rem; padding: 0.8rem 1.2rem; background-color: #f7f9f9; border-radius: 6px; font-weight: 600; text-align: right; }
                 .error { color: #d93025; background-color: #fce8e6; border: 1px solid #d93025; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
-
                 @media print {
                     :host, body {
                         background: #fff;
@@ -70,8 +69,15 @@ class NfeReportGenerator extends HTMLElement {
                     .logo { max-height: 40px; }
                     .header-info h1 { font-size: 18pt; color: #000; }
                     .header-info p { font-size: 9pt; color: #000; }
-                    #file-drop-area-wrapper, #action-buttons, #file-count, .error { display: none; }
-                    .container, #report-container { box-shadow: none; border-radius: 0; padding: 0; margin: 0; }
+                    #file-drop-area-wrapper, #action-buttons, #file-count, .error {
+                        display: none;
+                    }
+                    .container, #report-container {
+                        box-shadow: none;
+                        border-radius: 0;
+                        padding: 0;
+                        margin: 0;
+                    }
                     h2 { font-size: 14pt; color: #000; }
                     table { break-inside: auto; }
                     tr { break-inside: avoid; break-after: auto; }
@@ -79,10 +85,13 @@ class NfeReportGenerator extends HTMLElement {
                     th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 9pt; }
                     th { background-color: #f2f2f2; }
                     tr.canceled-row { background-color: #fee2e2 !important; }
-                    .summary, .filial-summary { page-break-inside: avoid; border: 1px solid #ddd; background-color: #fdfdfd; }
+                    .summary, .filial-summary {
+                        page-break-inside: avoid;
+                        border: 1px solid #ddd;
+                        background-color: #fdfdfd;
+                    }
                 }
             </style>
-            
             <header class="app-header">
                  <img src="logo.png" alt="Logomarca MCI" class="logo" onerror="this.style.display='none'">
                  <div class="header-info">
@@ -99,19 +108,19 @@ class NfeReportGenerator extends HTMLElement {
                     </div>
                     <div id="file-count">Nenhum arquivo selecionado</div>
                 </div>
-                
                 <div id="action-buttons">
                     <button id="print-button">Imprimir Relatório</button>
                     <button id="export-button">Exportar para CSV</button>
                 </div>
-                <div id="report-container"><!-- Report will be generated here --></div>
+                <div id="report-container"></div>
             </div>
         `;
     }
-    
+
     formatCurrency(value) {
         return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
+
     connectedCallback() {
         const shadow = this.shadowRoot;
         const fileInput = shadow.querySelector('#xml-files');
@@ -125,11 +134,12 @@ class NfeReportGenerator extends HTMLElement {
 
         reportDateEl.textContent = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
 
-        fileInput.addEventListener('change', (event) => {
-            const files = event.target.files;
+        const handleFiles = (files) => {
             fileCount.textContent = files.length > 0 ? `${files.length} arquivo(s) selecionado(s)` : 'Nenhum arquivo selecionado';
-            this.handleFileSelect(event, reportContainer, actionButtons, exportButton);
-        });
+            this.handleFileSelect(files, reportContainer, actionButtons, exportButton);
+        };
+
+        fileInput.addEventListener('change', () => handleFiles(fileInput.files));
 
         fileDropArea.addEventListener('dragover', (event) => {
             event.preventDefault();
@@ -141,18 +151,16 @@ class NfeReportGenerator extends HTMLElement {
         fileDropArea.addEventListener('drop', (event) => {
             event.preventDefault();
             fileDropArea.classList.remove('dragover');
-            const files = event.dataTransfer.files;
-            fileInput.files = files;
-            const changeEvent = new Event('change', { bubbles: true });
-            fileInput.dispatchEvent(changeEvent);
+            fileInput.files = event.dataTransfer.files;
+            handleFiles(event.dataTransfer.files);
         });
         fileDropArea.addEventListener('click', () => fileInput.click());
 
         printButton.addEventListener('click', () => window.print());
     }
-    handleFileSelect(event, reportContainer, actionButtons, exportButton) {
+
+    handleFileSelect(files, reportContainer, actionButtons, exportButton) {
         actionButtons.style.display = 'none';
-        const files = event.target.files;
         if (files.length === 0) {
             reportContainer.innerHTML = '';
             return;
@@ -160,58 +168,72 @@ class NfeReportGenerator extends HTMLElement {
 
         const reportData = [];
         let filesProcessed = 0;
-        reportContainer.innerHTML = `<p>Processando ${files.length} arquivos...</p>`;
+        const totalFiles = files.length;
+        reportContainer.innerHTML = `<p>Processando ${totalFiles} arquivos...</p>`;
 
-        Array.from(files).forEach(file => {
+        const processFile = (file) => {
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
                     const xmlString = e.target.result;
                     const parser = new DOMParser();
                     const xmlDoc = parser.parseFromString(xmlString, "text/xml");
-                    if (xmlDoc.getElementsByTagName('parsererror').length > 0) throw new Error('Arquivo XML inválido ou corrompido.');
 
-                    const procEvento = xmlDoc.getElementsByTagName('procEventoNFe')[0];
-                    if (procEvento) {
-                        const descEvento = procEvento.getElementsByTagName('descEvento')[0]?.textContent;
+                    if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
+                        throw new Error('Arquivo XML inválido ou corrompido.');
+                    }
+                    
+                    const procEventoNFe = xmlDoc.getElementsByTagName('procEventoNFe')[0];
+                    if (procEventoNFe) {
+                        const descEvento = procEventoNFe.getElementsByTagName('descEvento')[0]?.textContent;
                         if (descEvento === 'Cancelamento') {
-                            const chNFe = procEvento.getElementsByTagName('chNFe')[0]?.textContent;
+                            const chNFe = procEventoNFe.getElementsByTagName('chNFe')[0]?.textContent;
                             reportData.push({ isCanceledEvent: true, numeroNota: chNFe.substring(25, 34), fileName: file.name });
-                            return;
+                            return; 
                         }
                     }
 
-                    const protNFe = xmlDoc.getElementsByTagName('protNFe')[0];
-                    const isCanceled = protNFe && protNFe.getElementsByTagName('xMotivo')[0]?.textContent.toLowerCase().includes('cancelamento');
                     const nfeNode = xmlDoc.getElementsByTagName('nfeProc')[0] || xmlDoc.getElementsByTagName('NFe')[0];
-                    if (!nfeNode) throw new Error('Estrutura XML não reconhecida.');
-                    const infNFeNode = nfeNode.getElementsByTagName('infNFe')[0];
-                    if (!infNFeNode) throw new Error('Estrutura XML incompleta.');
+                    if (!nfeNode) throw new Error('Estrutura XML de NFe não reconhecida.');
 
-                    const getValue = (path) => path.split('/').reduce((node, part) => node?.getElementsByTagName(part)[0], infNFeNode)?.textContent || null;
+                    const infNFe = nfeNode.getElementsByTagName('infNFe')[0];
+                    if (!infNFe) throw new Error('Estrutura XML incompleta (infNFe).');
                     
-                    const freteValor = parseFloat(getValue('total/ICMSTot/vFrete') || 0);
-                    const modFrete = getValue('transp/modFrete');
+                    const protNFe = nfeNode.getElementsByTagName('protNFe')[0];
+                    const isCanceled = protNFe?.getElementsByTagName('xMotivo')[0]?.textContent.toLowerCase().includes('cancelamento');
+
+                    const getValue = (context, tag) => context?.getElementsByTagName(tag)[0]?.textContent;
+
+                    const emit = infNFe.getElementsByTagName('emit')[0];
+                    const dest = infNFe.getElementsByTagName('dest')[0];
+                    const total = infNFe.getElementsByTagName('total')[0];
+                    const ICMSTot = total?.getElementsByTagName('ICMSTot')[0];
+                    const transp = infNFe.getElementsByTagName('transp')[0];
+
+                    const freteValor = parseFloat(getValue(ICMSTot, 'vFrete') || 0);
+                    const modFrete = getValue(transp, 'modFrete');
                     
                     reportData.push({
-                        filial: getValue('emit/xNome') || 'Filial Não Identificada',
-                        filialUF: getValue('emit/enderEmit/UF') || 'N/A',
-                        numeroNota: getValue('ide/nNF') || 'N/A',
-                        cliente: getValue('dest/xNome') || 'N/A',
-                        cidade: getValue('dest/enderDest/xMun') || 'N/A',
-                        estado: getValue('dest/enderDest/UF') || 'N/A',
-                        contribuinte: {'1': 'Sim (Contribuinte ICMS)', '2': 'Isento', '9': 'Não Contribuinte'}[getValue('dest/indIEDest')] || 'Não Informado',
-                        frete: freteValor > 0 ? `Sim (${this.formatCurrency(freteValor)})` : {'0': 'Sim (Emitente)', '1': 'Sim (Destinatário)', '9': 'Não (Sem Frete)'}[modFrete] || 'Não Informado',
+                        filial: getValue(emit, 'xNome') || 'N/A',
+                        filialUF: getValue(emit.getElementsByTagName('enderEmit')[0], 'UF') || 'N/A',
+                        numeroNota: getValue(infNFe.getElementsByTagName('ide')[0], 'nNF') || 'N/A',
+                        cliente: getValue(dest, 'xNome') || 'N/A',
+                        cidade: getValue(dest.getElementsByTagName('enderDest')[0], 'xMun') || 'N/A',
+                        estado: getValue(dest.getElementsByTagName('enderDest')[0], 'UF') || 'N/A',
+                        contribuinte: { '1': 'Sim', '2': 'Isento', '9': 'Não' }[getValue(dest, 'indIEDest')] || 'N/I',
+                        frete: freteValor > 0 ? `Sim (${this.formatCurrency(freteValor)})` : { '0': 'Emitente', '1': 'Destinatário', '9': 'Não' }[modFrete] || 'N/I',
                         valorFrete: freteValor,
-                        difal: parseFloat(getValue('total/ICMSTot/vICMSUFDest') || 0),
-                        valorFaturado: parseFloat(getValue('total/ICMSTot/vNF') || 0) + parseFloat(getValue('total/ICMSTot/vFCPUFDest') || 0),
-                        isCanceled
+                        difal: parseFloat(getValue(ICMSTot, 'vICMSUFDest') || 0),
+                        valorFaturado: parseFloat(getValue(ICMSTot, 'vNF') || 0) + parseFloat(getValue(ICMSTot, 'vFCPUFDest') || 0),
+                        isCanceled: !!isCanceled,
+                        fileName: file.name
                     });
+
                 } catch (error) {
                     reportData.push({ error: error.message, fileName: file.name });
                 } finally {
                     filesProcessed++;
-                    if (filesProcessed === files.length) {
+                    if (filesProcessed === totalFiles) {
                         this.generateReport(reportData, reportContainer, actionButtons, exportButton);
                     }
                 }
@@ -219,104 +241,132 @@ class NfeReportGenerator extends HTMLElement {
             reader.onerror = () => {
                 reportData.push({ error: 'Erro de leitura do arquivo.', fileName: file.name });
                 filesProcessed++;
-                if (filesProcessed === files.length) {
+                if (filesProcessed === totalFiles) {
                     this.generateReport(reportData, reportContainer, actionButtons, exportButton);
                 }
             };
             reader.readAsText(file, 'UTF-8');
-        });
+        };
+
+        Array.from(files).forEach(processFile);
     }
+
     generateReport(data, reportContainer, actionButtons, exportButton) {
         const errors = data.filter(item => item.error);
-        const canceledEvents = new Map(data.filter(d => d.isCanceledEvent).map(d => [d.numeroNota, d]));
-        const nfeData = data.filter(d => !d.isCanceledEvent && !d.error);
+        const validData = data.filter(item => !item.error);
+        const canceledEventNumbers = new Set(validData.filter(d => d.isCanceledEvent).map(d => d.numeroNota));
+        const nfeData = validData.filter(d => !d.isCanceledEvent);
 
-        const finalData = nfeData.map(item => ({...item, status: (item.isCanceled || canceledEvents.has(item.numeroNota)) ? 'Cancelada' : 'Faturada' }));
-        
-        const billedData = finalData.filter(item => item.status === 'Faturada');
-        const canceledData = finalData.filter(item => item.status === 'Cancelada');
-
-        canceledEvents.forEach((event, numeroNota) => {
-            if (!finalData.some(d => d.numeroNota === numeroNota)) {
-                canceledData.push({ numeroNota, cliente: 'Info no evento de cancelamento', valorFaturado: 0, status: 'Cancelada', fromEvent: true });
+        nfeData.forEach(item => {
+            if (canceledEventNumbers.has(item.numeroNota)) {
+                item.isCanceled = true;
             }
         });
 
-        let html = '';
-        reportContainer.innerHTML = '';
+        const billedData = nfeData.filter(item => !item.isCanceled);
+        const canceledData = nfeData.filter(item => item.isCanceled);
 
-        if (finalData.length > 0) {
+        let html = '';
+        if (nfeData.length > 0) {
             actionButtons.style.display = 'flex';
-            exportButton.onclick = () => this.exportToCsv(finalData);
+            exportButton.onclick = () => this.exportToCsv(nfeData);
         }
 
         if (billedData.length > 0) {
-            const grouped = billedData.reduce((acc, item) => {
+            html += '<h2>Notas Fiscais Faturadas</h2>';
+            // Group by branch
+            const groupedByFilial = billedData.reduce((acc, item) => {
                 const key = `${item.filial} (${item.filialUF})`;
-                (acc[key] = acc[key] || []).push(item);
+                if (!acc[key]) acc[key] = [];
+                acc[key].push(item);
                 return acc;
             }, {});
 
-            html += '<h2>Notas Fiscais Faturadas</h2>';
-            for (const filialKey of Object.keys(grouped).sort()) {
+            Object.keys(groupedByFilial).sort().forEach(filialKey => {
                 html += `<h3>${filialKey}</h3>`;
-                html += '<table><thead><tr><th>Nº Nota</th><th>Cliente</th><th>Cidade/UF</th><th>Contribuinte</th><th>Frete</th><th>DIFAL</th><th>Valor Faturado</th></tr></thead><tbody>';
-                let subtotal = 0;
-                grouped[filialKey].forEach(item => {
-                    subtotal += item.valorFaturado;
+                html += '<table><thead><tr><th>Nº Nota</th><th>Cliente</th><th>Cidade/UF</th><th>Contrib.</th><th>Frete</th><th>DIFAL</th><th>Valor Faturado</th></tr></thead><tbody>';
+                let subtotalFilial = 0;
+                groupedByFilial[filialKey].forEach(item => {
+                    subtotalFilial += item.valorFaturado;
                     html += `<tr>
-                        <td>${item.numeroNota}</td><td>${item.cliente}</td><td>${item.cidade}/${item.estado}</td><td>${item.contribuinte}</td>
-                        <td>${item.frete}</td><td style="text-align: right;">${this.formatCurrency(item.difal)}</td><td style="text-align: right;">${this.formatCurrency(item.valorFaturado)}</td>
+                        <td>${item.numeroNota}</td>
+                        <td>${item.cliente}</td>
+                        <td>${item.cidade}/${item.estado}</td>
+                        <td>${item.contribuinte}</td>
+                        <td>${item.frete}</td>
+                        <td style="text-align: right;">${this.formatCurrency(item.difal)}</td>
+                        <td style="text-align: right;">${this.formatCurrency(item.valorFaturado)}</td>
                     </tr>`;
                 });
                 html += '</tbody></table>';
-                html += `<div class="filial-summary">Total Faturado na Filial: <strong>${this.formatCurrency(subtotal)}</strong></div>`;
-            }
+                html += `<div class="filial-summary">Total Faturado na Filial: <strong>${this.formatCurrency(subtotalFilial)}</strong></div>`;
+            });
             
-            const totalBilled = billedData.reduce((sum, item) => sum + item.valorFaturado, 0);
-            html += `<div class="summary"><h3>Resumo Geral de Faturamento</h3><p>Total de Notas Faturadas: <strong>${billedData.length}</strong></p><p>Total Faturado: <strong>${this.formatCurrency(totalBilled)}</strong></p></div>`;
+            const totalFaturadoDia = billedData.reduce((sum, item) => sum + item.valorFaturado, 0);
+            html += `<div class="summary"><h3>Resumo Geral de Faturamento</h3><p>Total de Notas Faturadas: <strong>${billedData.length}</strong></p><p>Total Faturado (Todas Filiais): <strong>${this.formatCurrency(totalFaturadoDia)}</strong></p></div>`;
         }
 
         if (canceledData.length > 0) {
-            html += '<h2>Notas Fiscais Canceladas</h2><table><thead><tr><th>Nº Nota</th><th>Cliente</th><th>Valor Cancelado</th></tr></thead><tbody>';
-            let totalCanceled = 0;
-            canceledData.sort((a, b) => a.numeroNota.localeCompare(b.numeroNota)).forEach(item => {
-                totalCanceled += item.valorFaturado;
-                html += `<tr class="canceled-row"><td>${item.numeroNota}</td><td>${item.cliente || 'N/A'}</td><td style="text-align: right;">${this.formatCurrency(item.valorFaturado)}</td></tr>`;
+            html += '<h2>Notas Fiscais Canceladas</h2>';
+            html += '<table><thead><tr><th>Nº Nota</th><th>Cliente</th><th>Cidade/UF</th><th>Valor Cancelado</th></tr></thead><tbody>';
+            let totalCanceledValue = 0;
+            canceledData.sort((a,b) => a.numeroNota.localeCompare(b.numeroNota)).forEach(item => {
+                totalCanceledValue += item.valorFaturado;
+                html += `<tr class="canceled-row">
+                    <td>${item.numeroNota}</td>
+                    <td>${item.cliente || 'N/A'}</td>
+                    <td>${item.cidade && item.estado ? `${item.cidade}/${item.estado}` : 'N/A'}</td>
+                    <td style="text-align: right;">${this.formatCurrency(item.valorFaturado)}</td>
+                </tr>`;
             });
             html += '</tbody></table>';
-            html += `<div class="filial-summary" style="border-left-color: #d93025; background-color: #fce8e6;">Total Cancelado: <strong>${this.formatCurrency(totalCanceled)} (${canceledData.length} notas)</strong></div>`;
+            html += `<div class="filial-summary" style="border-left: 5px solid #d93025; background-color: #fce8e6;">Total Cancelado: <strong>${this.formatCurrency(totalCanceledValue)} (${canceledData.length} notas)</strong></div>`;
         }
 
         if (errors.length > 0) {
             html += '<h2>Erros de Processamento</h2>';
-            errors.forEach(err => { html += `<p class="error"><strong>Arquivo: ${err.fileName}</strong><br>${err.error}</p>`; });
+            errors.forEach(err => {
+                html += `<p class="error"><strong>Arquivo: ${err.fileName}</strong><br>${err.error}</p>`;
+            });
         }
         
-        if (finalData.length === 0 && errors.length === 0) {
+        if (billedData.length === 0 && canceledData.length === 0 && errors.length === 0) {
             html = '<p>Nenhum dado de NFe encontrado nos arquivos para gerar o relatório.</p>';
         }
 
         reportContainer.innerHTML = html;
     }
+
     exportToCsv(data) {
-        const headers = ["Filial", "UF Filial", "Nº Nota", "Cliente", "Cidade/UF", "Contribuinte", "Frete", "Valor DIFAL", "Valor Faturado", "Status"];
-        const csvRows = data.map(item => [
-                item.filial, item.filialUF, item.numeroNota, item.cliente, `${item.cidade}/${item.estado}`,
-                item.contribuinte, item.frete.includes('R$') ? item.frete.match(/R\$ ([\d,.]+)/)[1].replace('.', '').replace(',', '.') : item.frete,
-                item.difal.toFixed(2), item.valorFaturado.toFixed(2), item.status
-            ].map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(',')
-        );
+        const headers = ["Filial", "UF Filial", "Nº Nota", "Cliente", "Cidade/UF Cliente", "Contribuinte", "Frete", "Valor DIFAL (R$)", "Valor Faturado (R$)", "Status"];
+        const csvRows = data.map(item => {
+            const status = item.isCanceled ? 'Cancelada' : 'Faturada';
+            const values = [
+                item.filial,
+                item.filialUF,
+                item.numeroNota,
+                item.cliente,
+                `${item.cidade}/${item.estado}`,
+                item.contribuinte,
+                item.frete.toString().includes('R$') ? item.valorFrete.toFixed(2).replace('.', ',') : item.frete,
+                item.difal.toFixed(2).replace('.', ','),
+                item.valorFaturado.toFixed(2).replace('.', ','),
+                status
+            ];
+            return values.map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(',');
+        });
+
         const csvString = ["﻿" + headers.join(','), ...csvRows].join('
 ');
         const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = url;
-        link.download = 'relatorio_faturamento.csv';
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'relatorio_faturamento.csv');
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     }
 }
+
 customElements.define('nfe-report-generator', NfeReportGenerator);
