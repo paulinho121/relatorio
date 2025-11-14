@@ -212,6 +212,13 @@ class NfeReportGenerator extends HTMLElement {
 
                 /* --- PRINT STYLES --- */
                 @media print {
+                    @page {
+                        margin: 0;
+                        size: auto;
+                    }
+                    body {
+                        margin: 1.5cm;
+                    }
                     .app-header {
                          display: flex;
                          justify-content: space-between;
