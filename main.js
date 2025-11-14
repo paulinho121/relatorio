@@ -4,113 +4,114 @@ class NfeReportGenerator extends HTMLElement {
         this.attachShadow({ mode: 'open' });
         this.shadowRoot.innerHTML = `
             <style>
+                /* --- RESET AND GLOBAL STYLES --- */
                 :host {
                     display: block;
+                    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    color: #333;
                 }
 
+                /* --- HEADER --- */
                 .app-header {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
                     padding: 1.5rem 2rem;
-                    background-color: var(--surface-color);
+                    background-color: #fff;
                     border-radius: 12px;
                     margin-bottom: 1.5rem;
                     box-shadow: 0 8px 24px rgba(0,0,0,0.05);
                 }
-
                 .logo {
                     max-height: 50px;
                     object-fit: contain;
                 }
-                
                 .header-info {
                     text-align: right;
                 }
-
                 .header-info h1 {
                     margin: 0;
                     font-size: 1.6rem;
                     font-weight: 600;
-                    color: var(--primary-color);
+                    color: #199B8E; /* Hardcoded color */
                 }
-
                 .header-info p {
                     margin: 0;
                     font-size: 0.9rem;
                     color: #5f6368;
                 }
 
-
+                /* --- MAIN CONTAINER --- */
                 .container {
-                    background: var(--surface-color);
+                    background: #fff;
                     padding: 2rem;
                     border-radius: 12px;
                     box-shadow: 0 8px 32px rgba(0,0,0,0.07);
                 }
 
+                /* --- SECTION HEADERS --- */
                 h2 {
-                    color: var(--primary-color);
-                    border-bottom: 2px solid var(--border-color);
+                    color: #199B8E; /* Hardcoded color */
+                    border-bottom: 2px solid #e0e0e0;
                     padding-bottom: 0.5rem;
                     margin-top: 2rem;
                     margin-bottom: 1.5rem;
                     font-size: 1.4rem;
                     font-weight: 600;
                 }
+                h3 {
+                    font-size: 1.2rem;
+                    font-weight: 600;
+                    color: #333;
+                }
 
+                /* --- FILE UPLOAD AREA --- */
                 .file-drop-area {
                     display: flex;
                     flex-direction: column;
                     justify-content: center;
                     align-items: center;
                     padding: 2rem;
-                    border: 2px dashed var(--border-color);
+                    border: 2px dashed #e0e0e0;
                     border-radius: 8px;
                     background-color: #fafafa;
                     text-align: center;
                     cursor: pointer;
                     transition: background-color 0.2s, border-color 0.2s;
                 }
-
                 .file-drop-area.dragover {
-                     background-color: var(--light-primary-bg);
-                     border-color: var(--primary-color);
+                     background-color: #e8f5f3;
+                     border-color: #199B8E;
                 }
-
                 .file-drop-area p {
                     margin: 0.5rem 0 1rem;
                     font-size: 1rem;
                     color: #5f6368;
                 }
-
-                #file-input-label {
+                #file-input-label { /* This is a button */
                     display: inline-block;
                     padding: 12px 24px;
-                    background-color: var(--primary-color);
+                    background-color: #199B8E; /* Hardcoded solid color */
                     color: white;
+                    border: none;
                     border-radius: 8px;
                     cursor: pointer;
                     font-weight: 500;
-                    transition: background-color 0.2s, transform 0.2s;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    transition: background-color 0.2s;
                 }
-
                 #file-input-label:hover {
-                    background-color: #137a6f;
-                    transform: translateY(-2px);
+                    background-color: #137a6f; /* Darker shade */
                 }
-
                 #xml-files {
                     display: none;
                 }
-
                 #file-count {
                     margin-top: 1rem;
                     color: #5f6368;
                     font-weight: 500;
                 }
 
+                /* --- ACTION BUTTONS (PRINT/EXPORT) --- */
                 #action-buttons {
                     margin-top: 1.5rem;
                     display: flex;
@@ -118,7 +119,6 @@ class NfeReportGenerator extends HTMLElement {
                     justify-content: center;
                     display: none; /* Hidden by default */
                 }
-
                 #action-buttons button {
                     padding: 12px 24px;
                     border: none;
@@ -127,96 +127,69 @@ class NfeReportGenerator extends HTMLElement {
                     cursor: pointer;
                     font-size: 0.95rem;
                     font-weight: 500;
-                    transition: all 0.2s;
-                    letter-spacing: 0.5px;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    transition: background-color 0.2s;
                 }
-
                 #print-button {
-                   background-color: var(--primary-color);
+                   background-color: #199B8E; /* Hardcoded solid color */
                 }
                 #print-button:hover {
-                    background-color: #137a6f;
-                    transform: translateY(-1px);
-                    box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+                    background-color: #137a6f; /* Darker shade */
                 }
-
                 #export-button {
-                   background-color: var(--secondary-color);
+                   background-color: #93C572; /* Hardcoded solid color */
                    color: white;
                 }
                 #export-button:hover {
-                    background-color: #82b45f;
-                    transform: translateY(-1px);
-                    box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+                    background-color: #82b45f; /* Darker shade */
                 }
 
+                /* --- REPORT TABLE --- */
                 #report-container {
                     margin-top: 2rem;
                     overflow-x: auto;
                 }
-
                 table {
                     width: 100%;
                     border-collapse: collapse;
                     margin-top: 1rem;
                 }
-
                 th, td {
-                    border: 1px solid var(--border-color);
+                    border: 1px solid #e0e0e0;
                     padding: 12px 15px;
                     text-align: left;
                     font-size: 0.9rem;
                 }
-
                 th {
-                    background-color: var(--header-bg-color);
-                    color: var(--text-color);
+                    background-color: #f7f7f7;
+                    color: #333;
                     position: sticky;
                     top: 0;
                     font-weight: 600;
                     border-bottom-width: 2px;
                 }
-
                 tr.canceled-row {
                     background-color: #fee2e2; 
                     text-decoration: line-through;
                     color: #b91c1c;
                 }
-                tr.canceled-row:hover {
-                    background-color: #fecaca;
-                }
-                
-                tr:nth-child(even):not(.canceled-row) {
-                    background-color: #fdfdfd;
-                }
-                tr:hover:not(.canceled-row) {
-                    background-color: var(--light-primary-bg);
-                }
+                tr:nth-child(even):not(.canceled-row) { background-color: #fdfdfd; }
+                tr:hover:not(.canceled-row) { background-color: #e8f5f3; }
 
+                /* --- SUMMARY SECTIONS --- */
                 .summary {
                     margin-top: 2rem;
                     padding: 1.5rem;
-                    background-color: var(--light-primary-bg);
-                    border-left: 5px solid var(--primary-color);
+                    background-color: #e8f5f3;
+                    border-left: 5px solid #199B8E;
                     border-radius: 8px;
                 }
-
                 .summary h3 {
                     margin-top: 0;
                     margin-bottom: 1rem;
-                    color: var(--primary-color);
-                    font-size: 1.3rem;
-                    font-weight: 600;
+                    color: #199B8E;
                 }
-
-                .summary p {
-                    margin: 0.5rem 0;
-                    font-size: 1rem;
-                }
-                .summary p strong {
-                    font-weight: 600;
-                }
+                .summary p { margin: 0.5rem 0; }
+                .summary p strong { font-weight: 600; }
 
                 .filial-summary {
                     margin-top: 1rem;
@@ -225,111 +198,60 @@ class NfeReportGenerator extends HTMLElement {
                     border-radius: 6px;
                     font-weight: 600;
                     text-align: right;
-                    font-size: 1rem;
                 }
 
+                /* --- ERROR MESSAGES --- */
                 .error {
-                    color: var(--error-color);
-                    background-color: var(--error-bg);
-                    border: 1px solid var(--error-color);
+                    color: #d93025;
+                    background-color: #fce8e6;
+                    border: 1px solid #d93025;
                     padding: 1rem;
                     border-radius: 8px;
                     margin-top: 1rem;
                 }
 
+                /* --- PRINT STYLES --- */
                 @media print {
-                    body, nfe-report-generator {
-                        margin: 0;
-                        padding: 0;
-                        box-shadow: none;
-                        font-family: 'Segoe UI', sans-serif;
-                        background: #fff;
-                        color: #000;
-                        font-size: 9pt;
-                    }
-
                     .app-header {
                          display: flex;
                          justify-content: space-between;
                          align-items: center;
                          border-bottom: 2px solid #ccc;
-                         padding: 0 0 1rem 0;
+                         padding-bottom: 1rem;
                          margin-bottom: 1.5rem;
-                         border-radius: 0;
-                         box-shadow: none;
                          width: 100%;
+                         background: #fff;
+                         box-shadow: none;
+                         border-radius: 0;
                     }
-
-                    .logo {
-                        max-height: 40px;
+                    .logo { max-height: 40px; }
+                    .header-info h1 { font-size: 18pt; color: #000; }
+                    .header-info p { font-size: 9pt; color: #000; }
+                    
+                    #file-drop-area-wrapper, #action-buttons, #file-count, .error {
+                        display: none;
                     }
-
-                    .header-info h1 {
-                        font-size: 18pt;
-                    }
-                     .header-info p {
-                        font-size: 9pt;
-                    }
-
-                    .container,
-                    #report-container {
+                    .container, #report-container {
                         box-shadow: none;
                         border-radius: 0;
                         padding: 0;
+                        margin: 0;
                     }
-
-                    #file-drop-area-wrapper, #action-buttons, #file-count {
-                        display: none;
-                    }
-
-                    #report-container, h2 {
-                        margin-top: 0;
-                    }
-
-                    h1, h2, h3 {
-                        page-break-after: avoid;
-                        page-break-inside: avoid;
-                        color: #333;
-                    }
-
-                    h2 {
-                        font-size: 14pt;
-                        margin-top: 1.5rem;
-                        margin-bottom: 1rem;
-                        border-bottom: 1px solid #eaeaea;
-                        padding-bottom: 0.5rem;
-                    }
-
-                    table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin-top: 1rem;
-                        break-inside: auto;
-                    }
-
+                    h2 { font-size: 14pt; color: #000; }
+                    table { break-inside: auto; }
                     tr { break-inside: avoid; break-after: auto; }
                     thead { display: table-header-group; }
-                    th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; font-size: 9pt; }
-                    th { background-color: #f2f2f2; font-weight: 600; color: #333; }
+                    th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 9pt; color: #000; }
+                    th { background-color: #f2f2f2; }
                     tr.canceled-row { background-color: #fee2e2 !important; }
-                    tr:nth-child(even) { background-color: #f9f9f9; }
-
                     .summary, .filial-summary {
                         page-break-inside: avoid;
-                        margin-top: 1.5rem;
-                        padding: 1rem;
                         border: 1px solid #ddd;
-                        border-left: 5px solid var(--primary-color);
                         background-color: #fdfdfd;
-                        border-radius: 5px;
                     }
-                    .filial-summary {
-                         border-left: 5px solid var(--secondary-color);
-                    }
-                    .error { display: none; }
                 }
-
             </style>
+            
             <header class="app-header">
                  <img src="logo.png" alt="Logomarca MCI" class="logo" onerror="this.style.display='none'">
                  <div class="header-info">
@@ -337,7 +259,6 @@ class NfeReportGenerator extends HTMLElement {
                     <p id="report-date"></p>
                  </div>
             </header>
-
             <div class="container">
                 <div id="file-drop-area-wrapper">
                     <div class="file-drop-area" id="file-drop-area">
@@ -352,9 +273,8 @@ class NfeReportGenerator extends HTMLElement {
                     <button id="print-button">Imprimir Relatório</button>
                     <button id="export-button">Exportar para CSV</button>
                 </div>
-
                 <div id="report-container">
-                    <!-- O relatório será inserido aqui -->
+                    <!-- Report will be generated here -->
                 </div>
             </div>
         `;
@@ -363,7 +283,6 @@ class NfeReportGenerator extends HTMLElement {
     formatCurrency(value) {
         return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
-
     connectedCallback() {
         const shadow = this.shadowRoot;
         const fileInput = shadow.querySelector('#xml-files');
@@ -395,16 +314,14 @@ class NfeReportGenerator extends HTMLElement {
             event.preventDefault();
             fileDropArea.classList.remove('dragover');
             const files = event.dataTransfer.files;
-            fileInput.files = files; // Assign dropped files to the input
+            fileInput.files = files;
             const changeEvent = new Event('change', { bubbles: true });
-            fileInput.dispatchEvent(changeEvent); // Trigger the change event
+            fileInput.dispatchEvent(changeEvent);
         });
         fileDropArea.addEventListener('click', () => fileInput.click());
 
-
         printButton.addEventListener('click', () => window.print());
     }
-
     handleFileSelect(event, reportContainer, actionButtons, exportButton) {
         actionButtons.style.display = 'none';
         const files = event.target.files;
@@ -416,12 +333,10 @@ class NfeReportGenerator extends HTMLElement {
         const reportData = [];
         let filesProcessed = 0;
         const totalFiles = files.length;
-
         reportContainer.innerHTML = `<p>Processando ${totalFiles} arquivos...</p>`;
 
         const processFile = (file) => {
             const reader = new FileReader();
-
             reader.onload = (e) => {
                 try {
                     const xmlString = e.target.result;
@@ -437,7 +352,6 @@ class NfeReportGenerator extends HTMLElement {
                         const evento = procEvento.getElementsByTagName('evento')[0];
                         const detEvento = evento?.getElementsByTagName('detEvento')[0];
                         const descEvento = detEvento?.getElementsByTagName('descEvento')[0]?.textContent;
-
                         if (descEvento === 'Cancelamento') {
                             const chNFe = evento.getElementsByTagName('chNFe')[0]?.textContent;
                             reportData.push({ isCanceledEvent: true, numeroNota: chNFe.substring(25, 34), fileName: file.name });
@@ -449,10 +363,10 @@ class NfeReportGenerator extends HTMLElement {
                     const isCanceled = protNFe && protNFe.getElementsByTagName('xMotivo')[0]?.textContent.toLowerCase().includes('cancelamento');
 
                     const nfeNode = xmlDoc.getElementsByTagName('nfeProc')[0] || xmlDoc.getElementsByTagName('NFe')[0];
-                    if (!nfeNode) throw new Error('Estrutura XML não reconhecida (tag <nfeProc> ou <NFe> não encontrada).');
+                    if (!nfeNode) throw new Error('Estrutura XML não reconhecida.');
                     
                     const infNFeNode = nfeNode.getElementsByTagName('infNFe')[0];
-                    if (!infNFeNode) throw new Error('Estrutura XML incompleta (tag <infNFe> não encontrada).');
+                    if (!infNFeNode) throw new Error('Estrutura XML incompleta.');
 
                     const getValue = (path) => {
                         const parts = path.split('/');
@@ -498,7 +412,6 @@ class NfeReportGenerator extends HTMLElement {
                         valorFaturado: valorNota + valorFecop,
                         isCanceled
                     });
-
                 } catch (error) {
                     reportData.push({ error: error.message, fileName: file.name });
                 } finally {
@@ -508,7 +421,6 @@ class NfeReportGenerator extends HTMLElement {
                     }
                 }
             };
-
             reader.onerror = () => {
                 reportData.push({ error: 'Erro de leitura do arquivo.', fileName: file.name });
                 filesProcessed++;
@@ -516,16 +428,12 @@ class NfeReportGenerator extends HTMLElement {
                     this.generateReport(reportData, reportContainer, actionButtons, exportButton);
                 }
             };
-
             reader.readAsText(file, 'UTF-8');
         };
-
         Array.from(files).forEach(processFile);
     }
-
     generateReport(data, reportContainer, actionButtons, exportButton) {
         const errors = data.filter(item => item.error);
-        
         const canceledEvents = data.filter(d => d.isCanceledEvent);
         const otherData = data.filter(d => !d.isCanceledEvent);
 
@@ -553,10 +461,12 @@ class NfeReportGenerator extends HTMLElement {
         let html = '';
         reportContainer.innerHTML = '';
 
-        if (billedData.length > 0) {
+        if (billedData.length > 0 || canceledData.length > 0) {
             actionButtons.style.display = 'flex';
             exportButton.onclick = () => this.exportToCsv(data.filter(item => !item.error));
+        }
 
+        if (billedData.length > 0) {
             const groupedByFilial = billedData.reduce((acc, item) => {
                 const key = `${item.filial} (${item.filialUF})`;
                 (acc[key] = acc[key] || []).push(item);
@@ -564,7 +474,6 @@ class NfeReportGenerator extends HTMLElement {
             }, {});
 
             html += '<h2>Notas Fiscais Faturadas</h2>';
-
             for (const filialKey of Object.keys(groupedByFilial).sort()) {
                 html += `<h3>${filialKey}</h3>`;
                 html += '<table><thead><tr><th>Nº Nota</th><th>Cliente</th><th>Cidade/UF</th><th>Contribuinte</th><th>Frete</th><th>DIFAL</th><th>Valor Faturado</th></tr></thead><tbody>';
@@ -582,7 +491,6 @@ class NfeReportGenerator extends HTMLElement {
                         <td style="text-align: right;">${this.formatCurrency(item.valorFaturado)}</td>
                     </tr>`;
                 });
-
                 html += '</tbody></table>';
                 html += `<div class="filial-summary">Total Faturado na Filial: <strong>${this.formatCurrency(subtotalFilial)}</strong></div>`;
             }
@@ -606,7 +514,6 @@ class NfeReportGenerator extends HTMLElement {
             
             let totalCanceledValue = 0;
             canceledData.sort((a, b) => a.numeroNota.localeCompare(b.numeroNota));
-
             canceledData.forEach(item => {
                 totalCanceledValue += item.valorFaturado;
                 html += `<tr class="canceled-row">
@@ -616,9 +523,8 @@ class NfeReportGenerator extends HTMLElement {
                     <td style="text-align: right;">${this.formatCurrency(item.valorFaturado)}</td>
                 </tr>`;
             });
-
             html += '</tbody></table>';
-             html += `<div class="filial-summary" style="border-left-color: var(--error-color);">Total Cancelado: <strong>${this.formatCurrency(totalCanceledValue)} (${canceledData.length} notas)</strong></div>`;
+             html += `<div class="filial-summary" style="border-left: 5px solid #d93025; background-color: #fce8e6;">Total Cancelado: <strong>${this.formatCurrency(totalCanceledValue)} (${canceledData.length} notas)</strong></div>`;
         }
 
         if (errors.length > 0) {
@@ -628,30 +534,24 @@ class NfeReportGenerator extends HTMLElement {
             });
         }
         
-        if (billedData.length === 0 && canceledData.length === 0 && errors.length > 0) {
-             html = '<p>Todos os arquivos selecionados continham erros.</p>';
-        } else if (billedData.length === 0 && canceledData.length === 0) {
+        if (billedData.length === 0 && canceledData.length === 0 && errors.length === 0) {
             html = '<p>Nenhum dado de NFe encontrado nos arquivos para gerar o relatório.</p>';
         }
 
         reportContainer.innerHTML = html;
     }
-
     exportToCsv(data) {
-        // Logic to handle canceled notes correctly for CSV export
+        const finalData = [];
         const canceledEvents = data.filter(d => d.isCanceledEvent);
         const otherData = data.filter(d => !d.isCanceledEvent);
-        const finalData = [];
 
         otherData.forEach(item => {
-            const isExplicitlyCanceled = item.isCanceled;
             const isCanceledByEvent = canceledEvents.some(e => e.numeroNota === item.numeroNota);
-            const status = (isExplicitlyCanceled || isCanceledByEvent) ? 'Cancelada' : 'Faturada';
+            const status = (item.isCanceled || isCanceledByEvent) ? 'Cancelada' : 'Faturada';
             finalData.push({ ...item, status });
         });
 
         const headers = ["Filial", "UF Filial", "Nº Nota", "Cliente", "Cidade/UF Cliente", "Contribuinte", "Frete", "Valor DIFAL (R$)", "Valor Faturado (R$)", "Status"];
-        
         const csvRows = finalData.map(item => {
             const values = [
                 item.filial,
@@ -667,9 +567,9 @@ class NfeReportGenerator extends HTMLElement {
             ];
             return values.map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(',');
         });
-
-        const csvString = [headers.join(','), ...csvRows].join('\n');
-        const blob = new Blob(["﻿" + csvString], { type: 'text/csv;charset=utf-8;' });
+        const csvString = ["﻿" + headers.join(','), ...csvRows].join('
+');
+        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.setAttribute('href', url);
