@@ -87,18 +87,18 @@ class NfeReportGenerator extends HTMLElement {
                 #file-input-label {
                     display: inline-block;
                     padding: 12px 24px;
-                    background: linear-gradient(45deg, var(--secondary-color), var(--primary-color));
+                    background-color: var(--primary-color);
                     color: white;
                     border-radius: 8px;
                     cursor: pointer;
                     font-weight: 500;
-                    transition: transform 0.2s, box-shadow 0.3s;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                    transition: background-color 0.2s, transform 0.2s;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
                 }
 
                 #file-input-label:hover {
+                    background-color: #137a6f;
                     transform: translateY(-2px);
-                    box-shadow: 0 6px 20px rgba(25, 155, 142, 0.4);
                 }
 
                 #xml-files {
@@ -112,44 +112,43 @@ class NfeReportGenerator extends HTMLElement {
                 }
 
                 #action-buttons {
-                    display: none;
                     margin-top: 1.5rem;
                     display: flex;
                     gap: 1rem;
                     justify-content: center;
+                    display: none; /* Hidden by default */
                 }
 
                 #action-buttons button {
-                    padding: 10px 22px;
+                    padding: 12px 24px;
                     border: none;
                     color: white;
                     border-radius: 8px;
                     cursor: pointer;
-                    font-size: 0.9rem;
+                    font-size: 0.95rem;
                     font-weight: 500;
-                    transition: all 0.3s;
+                    transition: all 0.2s;
                     letter-spacing: 0.5px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
                 }
 
                 #print-button {
                    background-color: var(--primary-color);
-                   box-shadow: 0 4px 15px rgba(25, 155, 142, 0.3);
                 }
                 #print-button:hover {
-                    background-color: #137a6f; 
+                    background-color: #137a6f;
                     transform: translateY(-1px);
-                    box-shadow: 0 6px 20px rgba(25, 155, 142, 0.4);
+                    box-shadow: 0 6px 16px rgba(0,0,0,0.12);
                 }
 
                 #export-button {
                    background-color: var(--secondary-color);
-                   color: var(--text-color);
-                   box-shadow: 0 4px 15px rgba(147, 197, 114, 0.3);
+                   color: white;
                 }
                 #export-button:hover {
                     background-color: #82b45f;
                     transform: translateY(-1px);
-                    box-shadow: 0 6px 20px rgba(147, 197, 114, 0.4);
+                    box-shadow: 0 6px 16px rgba(0,0,0,0.12);
                 }
 
                 #report-container {
@@ -279,7 +278,7 @@ class NfeReportGenerator extends HTMLElement {
                         padding: 0;
                     }
 
-                    .container > p:first-of-type, #file-drop-area-wrapper, #action-buttons, #file-count {
+                    #file-drop-area-wrapper, #action-buttons, #file-count {
                         display: none;
                     }
 
@@ -670,7 +669,7 @@ class NfeReportGenerator extends HTMLElement {
         });
 
         const csvString = [headers.join(','), ...csvRows].join('\n');
-        const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob(["﻿" + csvString], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.setAttribute('href', url);
