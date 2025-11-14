@@ -188,7 +188,9 @@ class NfeReportGenerator extends HTMLElement {
                         const descEvento = procEventoNFe.getElementsByTagName('descEvento')[0]?.textContent;
                         if (descEvento === 'Cancelamento') {
                             const chNFe = procEventoNFe.getElementsByTagName('chNFe')[0]?.textContent;
-                            reportData.push({ isCanceledEvent: true, numeroNota: chNFe.substring(25, 34), fileName: file.name });
+                            if (chNFe) {
+                                reportData.push({ isCanceledEvent: true, numeroNota: chNFe.substring(25, 34), fileName: file.name });
+                            }
                             return; 
                         }
                     }
@@ -200,7 +202,7 @@ class NfeReportGenerator extends HTMLElement {
                     if (!infNFe) throw new Error('Estrutura XML incompleta (infNFe).');
                     
                     const protNFe = nfeNode.getElementsByTagName('protNFe')[0];
-                    const isCanceled = protNFe?.getElementsByTagName('xMotivo')[0]?.textContent.toLowerCase().includes('cancelamento');
+                    const isCanceled = protNFe?.getElementsByTagName('xMotivo')[0]?.textContent?.toLowerCase().includes('cancelamento');
 
                     const getValue = (context, tag) => context?.getElementsByTagName(tag)[0]?.textContent;
 
@@ -356,8 +358,7 @@ class NfeReportGenerator extends HTMLElement {
             return values.map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(',');
         });
 
-        const csvString = ["﻿" + headers.join(','), ...csvRows].join('
-');
+        const csvString = ["\uFEFF" + headers.join(','), ...csvRows].join('\n');
         const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');

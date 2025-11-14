@@ -1,40 +1,59 @@
-# Blueprint: NFe XML Report Generator
+# Blueprint: Gerador de Relatório de NFe
 
-## Overview
+## Visão Geral
 
-This application allows users to select multiple Nota Fiscal Eletrônica (NFe) XML files, processes them, and generates a consolidated report. The report provides a summary of all processed invoices, grouped by company branch, and includes totals for invoiced amounts, freight costs, and DIFAL. The application is built as a Web Component, using vanilla HTML, CSS, and JavaScript, and runs entirely in the browser.
+Esta aplicação é uma ferramenta web para processar arquivos XML de Nota Fiscal Eletrônica (NFe). Ela permite que o usuário arraste e solte múltiplos arquivos XML, processa esses arquivos para extrair informações relevantes, e então exibe um relatório de faturamento consolidado na tela. O relatório distingue entre notas faturadas e canceladas, agrupa os dados por filial, e fornece um resumo geral. A aplicação também oferece funcionalidades para imprimir o relatório ou exportar os dados para um arquivo CSV.
 
-## Project Structure
+## Estilo e Design
 
-- `index.html`: The main HTML file containing the Web Component and its styles.
-- `logo.png`: The company logo.
+- **Layout:** Moderno, limpo e responsivo, com um cabeçalho claro, uma área de upload de arquivos bem definida e um contêiner para o relatório gerado.
+- **Cores:** Utiliza uma paleta de cores profissional, com tons de verde (#199B8E) para destaque e ações primárias, cinzas para texto e fundos suaves (#f4f7f6).
+- **Tipografia:** Usa a fonte "Poppins" para uma aparência moderna e legível.
+- **Componentes:**
+    - **Cabeçalho:** Contém o logo da empresa (se disponível) e o título do relatório com a data atual.
+    - **Área de Upload:** Uma zona de "arrastar e soltar" interativa que também funciona como um botão de clique para selecionar arquivos. A área muda de cor para dar feedback visual quando um arquivo é arrastado sobre ela.
+    - **Botões de Ação:** Botões para "Imprimir Relatório" e "Exportar para CSV" que aparecem após o processamento dos arquivos.
+    - **Tabela de Relatório:** Exibe os dados de forma clara, com cabeçalhos fixos e linhas alternadas. Notas canceladas são visualmente destacadas.
+    - **Resumos:** Seções de resumo para totais por filial e um resumo geral do faturamento.
+- **Efeitos:** Sombras sutis (`box-shadow`) são usadas para criar uma sensação de profundidade e destacar os elementos principais.
 
-## Style, Design, and Features
+## Funcionalidades Implementadas
 
-- **File Input**: Users can select multiple XML files.
-- **Report Generation**: Generates a detailed report from the XML files.
-- **Data Grouping**: Report data is grouped by `filial` (branch).
-- **Summaries**: Provides totals for each branch and a general summary.
-- **Cancellation Handling**: Correctly identifies and separates canceled invoices.
-- **Professional Styling**: Uses a color scheme based on the company logo.
-- **Printing**: Includes a print-friendly version of the report.
-- **CSV Export**: Allows exporting the report data to a CSV file.
-- **Responsive Design**: The layout adapts to different screen sizes.
+1.  **Componente Web Encapsulado (`nfe-report-generator`):** Toda a funcionalidade da aplicação está contida dentro de um Custom Element, utilizando Shadow DOM para garantir que seus estilos e scripts não conflitem com o resto da página.
 
-## Current Plan: Professional Layout Enhancement
+2.  **Upload de Arquivos Flexível:**
+    - O usuário pode adicionar arquivos XML clicando em um botão e selecionando-os.
+    - O usuário pode arrastar e soltar os arquivos diretamente na área designada.
 
-The user has requested a more professional layout for the report.
+3.  **Processamento de XML no Cliente:**
+    - A aplicação lê e processa os arquivos XML diretamente no navegador, sem necessidade de enviá-los para um servidor.
+    - Utiliza a `DOMParser` API para analisar o conteúdo dos arquivos XML.
+    - Extrai as seguintes informações de cada NFe: Filial (emissor), Cliente (destinatário), número da nota, valores, status (faturada ou cancelada), entre outros.
+    - Identifica e trata notas de cancelamento, tanto em arquivos de evento (`procEventoNFe`) quanto em notas que contêm a informação de cancelamento no seu XML principal (`protNFe`).
 
-### Plan Steps:
+4.  **Geração de Relatório Dinâmico:**
+    - Exibe uma tabela com as notas fiscais faturadas, agrupadas por filial.
+    - Calcula e exibe o subtotal faturado para cada filial.
+    - Exibe uma tabela separada para as notas fiscais canceladas.
+    - Apresenta um resumo geral com o total de notas faturadas e o valor total do faturamento.
+    - Mostra mensagens de erro caso algum arquivo XML seja inválido ou não possa ser lido.
 
-1.  **Incorporate Logo**: The user has provided the company logo. It has been saved as `logo.png` and is displayed in the report header.
-2.  **Enhance Typography**:
-    *   Import and apply the 'Poppins' font from Google Fonts for a more modern and professional look.
-    *   Adjust font sizes and weights to improve readability and visual hierarchy.
-3.  **Improve Background and Shadows**:
-    *   Add a subtle noise texture to the main body background to give it a premium feel.
-    *   Update the box-shadow on the main container to create a "lifted" effect with more depth.
-4.  **Refine Header**:
-    *   Adjust the styling of the report header to better integrate the logo and report date.
-5.  **General Polish**:
-    *   Review and adjust spacing, alignment, and other minor visual details for a more polished final result.
+5.  **Impressão:**
+    - Um botão "Imprimir Relatório" formata a página para uma versão otimizada para impressão, removendo elementos de interface como botões e a área de upload.
+
+6.  **Exportação para CSV:**
+    - Um botão "Exportar para CSV" gera um arquivo CSV com todos os dados processados, que pode ser aberto em planilhas como Excel ou Google Sheets.
+
+## Correções e Melhorias
+
+- **Resolução de Problema de Cache (Cache-Busting):**
+    - **Problema:** Foi encontrado um erro persistente (`SyntaxError`) que impedia a aplicação de carregar. A causa foi identificada como um problema de cache no ambiente de desenvolvimento.
+    - **Solução:** Adicionado um parâmetro de versão à tag `<script>` no `index.html` para forçar o navegador a carregar a versão mais recente do script.
+
+- **Correção de Erro de Processamento de XML (`TypeError`):
+    - **Problema:** A aplicação falhava ao processar arquivos XML de NFe que não continham a tag de motivo de cancelamento (`xMotivo`).
+    - **Solução:** Adicionado o operador de "optional chaining" (`?.`) para evitar o erro, permitindo que o processamento continue de forma segura.
+
+- **Correção de Sintaxe na Exportação para CSV:**
+    - **Problema:** Um erro de sintaxe na função `exportToCsv` impedia a geração do arquivo CSV.
+    - **Solução:** A linha de código que constrói a string do CSV foi corrigida, garantindo a junção correta do cabeçalho e das linhas com o caractere de nova linha (`\n`) e adicionando o BOM (`\uFEFF`) para compatibilidade com Excel.
