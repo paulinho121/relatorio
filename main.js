@@ -49,7 +49,8 @@ class NfeReportGenerator extends HTMLElement {
                 .summary h3 { margin-top: 0; margin-bottom: 1rem; color: #199B8E; }
                 .summary p { margin: 0.5rem 0; }
                 .summary p strong { font-weight: 600; }
-                .filial-summary { margin-top: 1rem; padding: 0.8rem 1.2rem; background-color: #f7f9f9; border-radius: 6px; font-weight: 600; text-align: right; }
+                .filial-summary { margin-top: 1rem; padding: 0.8rem 1.2rem; background-color: #f7f9f9; border-radius: 6px; text-align: right; }
+                .filial-summary p { margin: 0.3rem 0; font-weight: 600; }
                 .error { color: #d93025; background-color: #fce8e6; border: 1px solid #d93025; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
                 @media print {
                     :host, body {
@@ -288,8 +289,12 @@ class NfeReportGenerator extends HTMLElement {
                 html += `<h3>${filialKey}</h3>`;
                 html += '<table><thead><tr><th>Nº Nota</th><th>Cliente</th><th>Cidade/UF</th><th>Contrib.</th><th>Frete</th><th>DIFAL</th><th>Valor Faturado</th></tr></thead><tbody>';
                 let subtotalFilial = 0;
+                let subtotalDifal = 0;
+                let subtotalFrete = 0;
                 groupedByFilial[filialKey].forEach(item => {
                     subtotalFilial += item.valorFaturado;
+                    subtotalDifal += item.difal;
+                    subtotalFrete += item.valorFrete;
                     html += `<tr>
                         <td>${item.numeroNota}</td>
                         <td>${item.cliente}</td>
@@ -301,11 +306,23 @@ class NfeReportGenerator extends HTMLElement {
                     </tr>`;
                 });
                 html += '</tbody></table>';
-                html += `<div class="filial-summary">Total Faturado na Filial: <strong>${this.formatCurrency(subtotalFilial)}</strong></div>`;
+                html += `<div class="filial-summary">
+                            <p>Total Faturado: <strong>${this.formatCurrency(subtotalFilial)}</strong></p>
+                            <p>Total DIFAL: <strong>${this.formatCurrency(subtotalDifal)}</strong></p>
+                            <p>Total Frete: <strong>${this.formatCurrency(subtotalFrete)}</strong></p>
+                         </div>`;
             });
             
             const totalFaturadoDia = billedData.reduce((sum, item) => sum + item.valorFaturado, 0);
-            html += `<div class="summary"><h3>Resumo Geral de Faturamento</h3><p>Total de Notas Faturadas: <strong>${billedData.length}</strong></p><p>Total Faturado (Todas Filiais): <strong>${this.formatCurrency(totalFaturadoDia)}</strong></p></div>`;
+            const totalDifalDia = billedData.reduce((sum, item) => sum + item.difal, 0);
+            const totalFreteDia = billedData.reduce((sum, item) => sum + item.valorFrete, 0);
+            html += `<div class="summary">
+                        <h3>Resumo Geral de Faturamento</h3>
+                        <p>Total de Notas Faturadas: <strong>${billedData.length}</strong></p>
+                        <p>Total Faturado (Todas Filiais): <strong>${this.formatCurrency(totalFaturadoDia)}</strong></p>
+                        <p>Total DIFAL (Todas Filiais): <strong>${this.formatCurrency(totalDifalDia)}</strong></p>
+                        <p>Total Frete (Todas Filiais): <strong>${this.formatCurrency(totalFreteDia)}</strong></p>
+                    </div>`;
         }
 
         if (canceledData.length > 0) {
@@ -358,7 +375,8 @@ class NfeReportGenerator extends HTMLElement {
             return values.map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(',');
         });
 
-        const csvString = ["\uFEFF" + headers.join(','), ...csvRows].join('\n');
+        const csvString = ["﻿" + headers.join(','), ...csvRows].join('
+');
         const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
