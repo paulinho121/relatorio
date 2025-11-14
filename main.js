@@ -33,7 +33,7 @@ class NfeReportGenerator extends HTMLElement {
                     margin: 0;
                     font-size: 1.6rem;
                     font-weight: 600;
-                    color: #199B8E; /* Hardcoded color */
+                    color: #199B8E;
                 }
                 .header-info p {
                     margin: 0;
@@ -51,7 +51,7 @@ class NfeReportGenerator extends HTMLElement {
 
                 /* --- SECTION HEADERS --- */
                 h2 {
-                    color: #199B8E; /* Hardcoded color */
+                    color: #199B8E;
                     border-bottom: 2px solid #e0e0e0;
                     padding-bottom: 0.5rem;
                     margin-top: 2rem;
@@ -83,15 +83,10 @@ class NfeReportGenerator extends HTMLElement {
                      background-color: #e8f5f3;
                      border-color: #199B8E;
                 }
-                .file-drop-area p {
-                    margin: 0.5rem 0 1rem;
-                    font-size: 1rem;
-                    color: #5f6368;
-                }
-                #file-input-label { /* This is a button */
+                #file-input-label {
                     display: inline-block;
                     padding: 12px 24px;
-                    background-color: #199B8E; /* Hardcoded solid color */
+                    background-color: #199B8E;
                     color: white;
                     border: none;
                     border-radius: 8px;
@@ -100,7 +95,7 @@ class NfeReportGenerator extends HTMLElement {
                     transition: background-color 0.2s;
                 }
                 #file-input-label:hover {
-                    background-color: #137a6f; /* Darker shade */
+                    background-color: #137a6f;
                 }
                 #xml-files {
                     display: none;
@@ -111,7 +106,7 @@ class NfeReportGenerator extends HTMLElement {
                     font-weight: 500;
                 }
 
-                /* --- ACTION BUTTONS (PRINT/EXPORT) --- */
+                /* --- ACTION BUTTONS --- */
                 #action-buttons {
                     margin-top: 1.5rem;
                     display: flex;
@@ -130,104 +125,51 @@ class NfeReportGenerator extends HTMLElement {
                     transition: background-color 0.2s;
                 }
                 #print-button {
-                   background-color: #199B8E; /* Hardcoded solid color */
+                   background-color: #199B8E;
                 }
                 #print-button:hover {
-                    background-color: #137a6f; /* Darker shade */
+                    background-color: #137a6f;
                 }
                 #export-button {
-                   background-color: #93C572; /* Hardcoded solid color */
+                   background-color: #93C572;
                    color: white;
                 }
                 #export-button:hover {
-                    background-color: #82b45f; /* Darker shade */
+                    background-color: #82b45f;
                 }
 
-                /* --- REPORT TABLE --- */
-                #report-container {
-                    margin-top: 2rem;
-                    overflow-x: auto;
-                }
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin-top: 1rem;
-                }
-                th, td {
-                    border: 1px solid #e0e0e0;
-                    padding: 12px 15px;
-                    text-align: left;
-                    font-size: 0.9rem;
-                }
-                th {
-                    background-color: #f7f7f7;
-                    color: #333;
-                    position: sticky;
-                    top: 0;
-                    font-weight: 600;
-                    border-bottom-width: 2px;
-                }
-                tr.canceled-row {
-                    background-color: #fee2e2; 
-                    text-decoration: line-through;
-                    color: #b91c1c;
-                }
+                /* --- REPORT STYLES --- */
+                #report-container { margin-top: 2rem; overflow-x: auto; }
+                table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+                th, td { border: 1px solid #e0e0e0; padding: 12px 15px; text-align: left; font-size: 0.9rem; }
+                th { background-color: #f7f7f7; position: sticky; top: 0; font-weight: 600; border-bottom-width: 2px; }
+                tr.canceled-row { background-color: #fee2e2; text-decoration: line-through; color: #b91c1c; }
                 tr:nth-child(even):not(.canceled-row) { background-color: #fdfdfd; }
                 tr:hover:not(.canceled-row) { background-color: #e8f5f3; }
-
-                /* --- SUMMARY SECTIONS --- */
-                .summary {
-                    margin-top: 2rem;
-                    padding: 1.5rem;
-                    background-color: #e8f5f3;
-                    border-left: 5px solid #199B8E;
-                    border-radius: 8px;
-                }
-                .summary h3 {
-                    margin-top: 0;
-                    margin-bottom: 1rem;
-                    color: #199B8E;
-                }
+                .summary { margin-top: 2rem; padding: 1.5rem; background-color: #e8f5f3; border-left: 5px solid #199B8E; border-radius: 8px; }
+                .summary h3 { margin-top: 0; margin-bottom: 1rem; color: #199B8E; }
                 .summary p { margin: 0.5rem 0; }
                 .summary p strong { font-weight: 600; }
-
-                .filial-summary {
-                    margin-top: 1rem;
-                    padding: 0.8rem 1.2rem;
-                    background-color: #f7f9f9;
-                    border-radius: 6px;
-                    font-weight: 600;
-                    text-align: right;
-                }
-
-                /* --- ERROR MESSAGES --- */
-                .error {
-                    color: #d93025;
-                    background-color: #fce8e6;
-                    border: 1px solid #d93025;
-                    padding: 1rem;
-                    border-radius: 8px;
-                    margin-top: 1rem;
-                }
+                .filial-summary { margin-top: 1rem; padding: 0.8rem 1.2rem; background-color: #f7f9f9; border-radius: 6px; font-weight: 600; text-align: right; }
+                .error { color: #d93025; background-color: #fce8e6; border: 1px solid #d93025; padding: 1rem; border-radius: 8px; margin-top: 1rem; }
 
                 /* --- PRINT STYLES --- */
                 @media print {
                     @page {
-                        margin: 0;
+                        margin: 1cm;
                         size: auto;
                     }
-                    body {
-                        margin: 1.5cm;
+                    :host, body {
+                        background: #fff;
+                        color: #000;
+                        margin: 0;
+                        padding: 0;
                     }
                     .app-header {
-                         display: flex;
-                         justify-content: space-between;
-                         align-items: center;
                          border-bottom: 2px solid #ccc;
                          padding-bottom: 1rem;
                          margin-bottom: 1.5rem;
                          width: 100%;
-                         background: #fff;
                          box-shadow: none;
                          border-radius: 0;
                     }
@@ -248,7 +190,7 @@ class NfeReportGenerator extends HTMLElement {
                     table { break-inside: auto; }
                     tr { break-inside: avoid; break-after: auto; }
                     thead { display: table-header-group; }
-                    th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 9pt; color: #000; }
+                    th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 9pt; }
                     th { background-color: #f2f2f2; }
                     tr.canceled-row { background-color: #fee2e2 !important; }
                     .summary, .filial-summary {
