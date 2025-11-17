@@ -375,8 +375,7 @@ class NfeReportGenerator extends HTMLElement {
             return values.map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(',');
         });
 
-        const csvString = ["﻿" + headers.join(','), ...csvRows].join('
-');
+        const csvString = ["\uFEFF" + headers.join(','), ...csvRows].join('\n');
         const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
