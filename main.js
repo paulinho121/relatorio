@@ -1,3 +1,4 @@
+
 class NfeReportGenerator extends HTMLElement {
     constructor() {
         super();
@@ -38,6 +39,8 @@ class NfeReportGenerator extends HTMLElement {
                 #print-button:hover { background-color: #137a6f; }
                 #export-button { background-color: #93C572; color: white; }
                 #export-button:hover { background-color: #82b45f; }
+                #delete-button { background-color: #d93025; }
+                #delete-button:hover { background-color: #b91c1c; }
                 #report-container { margin-top: 2rem; overflow-x: auto; }
                 table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
                 th, td { border: 1px solid #e0e0e0; padding: 12px 15px; text-align: left; font-size: 0.9rem; }
@@ -70,7 +73,7 @@ class NfeReportGenerator extends HTMLElement {
                     .logo { max-height: 40px; }
                     .header-info h1 { font-size: 18pt; color: #000; }
                     .header-info p { font-size: 9pt; color: #000; }
-                    #file-drop-area-wrapper, #action-buttons, #file-count, .error {
+                    #file-drop-area-wrapper, #action-buttons, #file-count, .error, th:first-child, td:first-child {
                         display: none;
                     }
                     .container, #report-container {
@@ -110,6 +113,7 @@ class NfeReportGenerator extends HTMLElement {
                     <div id="file-count">Nenhum arquivo selecionado</div>
                 </div>
                 <div id="action-buttons">
+                    <button id="delete-button">Excluir Linhas</button>
                     <button id="print-button">Imprimir Relatório</button>
                     <button id="export-button">Exportar para CSV</button>
                 </div>
@@ -131,7 +135,10 @@ class NfeReportGenerator extends HTMLElement {
         const actionButtons = shadow.querySelector('#action-buttons');
         const printButton = shadow.querySelector('#print-button');
         const exportButton = shadow.querySelector('#export-button');
+        const deleteButton = shadow.querySelector('#delete-button');
         const reportDateEl = shadow.querySelector('#report-date');
+
+        this.reportData = [];
 
         reportDateEl.textContent = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
 
@@ -158,6 +165,21 @@ class NfeReportGenerator extends HTMLElement {
         fileDropArea.addEventListener('click', () => fileInput.click());
 
         printButton.addEventListener('click', () => window.print());
+        deleteButton.addEventListener('click', () => this.deleteSelectedRows());
+    }
+
+    deleteSelectedRows() {
+        const shadow = this.shadowRoot;
+        const checkboxes = shadow.querySelectorAll('.row-checkbox:checked');
+        const numbersToDelete = Array.from(checkboxes).map(cb => cb.value);
+
+        if (numbersToDelete.length === 0) {
+            alert('Nenhuma linha selecionada para exclusão.');
+            return;
+        }
+
+        this.reportData = this.reportData.filter(item => !numbersToDelete.includes(item.numeroNota));
+        this.generateReport(this.reportData, this.shadowRoot.querySelector('#report-container'), this.shadowRoot.querySelector('#action-buttons'), this.shadowRoot.querySelector('#export-button'));
     }
 
     handleFileSelect(files, reportContainer, actionButtons, exportButton) {
@@ -167,7 +189,7 @@ class NfeReportGenerator extends HTMLElement {
             return;
         }
 
-        const reportData = [];
+        this.reportData = [];
         let filesProcessed = 0;
         const totalFiles = files.length;
         reportContainer.innerHTML = `<p>Processando ${totalFiles} arquivos...</p>`;
@@ -190,7 +212,7 @@ class NfeReportGenerator extends HTMLElement {
                         if (descEvento === 'Cancelamento') {
                             const chNFe = procEventoNFe.getElementsByTagName('chNFe')[0]?.textContent;
                             if (chNFe) {
-                                reportData.push({ isCanceledEvent: true, numeroNota: chNFe.substring(25, 34), fileName: file.name });
+                                this.reportData.push({ isCanceledEvent: true, numeroNota: chNFe.substring(25, 34), fileName: file.name });
                             }
                             return; 
                         }
@@ -216,7 +238,7 @@ class NfeReportGenerator extends HTMLElement {
                     const freteValor = parseFloat(getValue(ICMSTot, 'vFrete') || 0);
                     const modFrete = getValue(transp, 'modFrete');
                     
-                    reportData.push({
+                    this.reportData.push({
                         filial: getValue(emit, 'xNome') || 'N/A',
                         filialUF: getValue(emit.getElementsByTagName('enderEmit')[0], 'UF') || 'N/A',
                         numeroNota: getValue(infNFe.getElementsByTagName('ide')[0], 'nNF') || 'N/A',
@@ -233,19 +255,19 @@ class NfeReportGenerator extends HTMLElement {
                     });
 
                 } catch (error) {
-                    reportData.push({ error: error.message, fileName: file.name });
+                    this.reportData.push({ error: error.message, fileName: file.name });
                 } finally {
                     filesProcessed++;
                     if (filesProcessed === totalFiles) {
-                        this.generateReport(reportData, reportContainer, actionButtons, exportButton);
+                        this.generateReport(this.reportData, reportContainer, actionButtons, exportButton);
                     }
                 }
             };
             reader.onerror = () => {
-                reportData.push({ error: 'Erro de leitura do arquivo.', fileName: file.name });
+                this.reportData.push({ error: 'Erro de leitura do arquivo.', fileName: file.name });
                 filesProcessed++;
                 if (filesProcessed === totalFiles) {
-                    this.generateReport(reportData, reportContainer, actionButtons, exportButton);
+                    this.generateReport(this.reportData, reportContainer, actionButtons, exportButton);
                 }
             };
             reader.readAsText(file, 'UTF-8');
@@ -255,6 +277,7 @@ class NfeReportGenerator extends HTMLElement {
     }
 
     generateReport(data, reportContainer, actionButtons, exportButton) {
+        this.reportData = data; // Store the data
         const errors = data.filter(item => item.error);
         const validData = data.filter(item => !item.error);
         const canceledEventNumbers = new Set(validData.filter(d => d.isCanceledEvent).map(d => d.numeroNota));
@@ -287,7 +310,7 @@ class NfeReportGenerator extends HTMLElement {
 
             Object.keys(groupedByFilial).sort().forEach(filialKey => {
                 html += `<h3>${filialKey}</h3>`;
-                html += '<table><thead><tr><th>Nº Nota</th><th>Cliente</th><th>Cidade/UF</th><th>Contrib.</th><th>Frete</th><th>DIFAL</th><th>Valor Faturado</th></tr></thead><tbody>';
+                html += '<table><thead><tr><th><input type="checkbox" id="select-all"></th><th>Nº Nota</th><th>Cliente</th><th>Cidade/UF</th><th>Contrib.</th><th>Frete</th><th>DIFAL</th><th>Valor Faturado</th></tr></thead><tbody>';
                 let subtotalFilial = 0;
                 let subtotalDifal = 0;
                 let subtotalFrete = 0;
@@ -296,6 +319,7 @@ class NfeReportGenerator extends HTMLElement {
                     subtotalDifal += item.difal;
                     subtotalFrete += item.valorFrete;
                     html += `<tr>
+                        <td><input type="checkbox" class="row-checkbox" value="${item.numeroNota}"></td>
                         <td>${item.numeroNota}</td>
                         <td>${item.cliente}</td>
                         <td>${item.cidade}/${item.estado}</td>
@@ -354,6 +378,15 @@ class NfeReportGenerator extends HTMLElement {
         }
 
         reportContainer.innerHTML = html;
+
+        const selectAllCheckbox = this.shadowRoot.querySelector('#select-all');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', (e) => {
+                this.shadowRoot.querySelectorAll('.row-checkbox').forEach(checkbox => {
+                    checkbox.checked = e.target.checked;
+                });
+            });
+        }
     }
 
     exportToCsv(data) {

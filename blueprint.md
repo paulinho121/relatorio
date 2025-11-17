@@ -2,18 +2,18 @@
 
 ## Visão Geral
 
-Esta aplicação é uma ferramenta web para processar arquivos XML de Nota Fiscal Eletrônica (NFe). Ela permite que o usuário arraste e solte múltiplos arquivos XML, processa esses arquivos para extrair informações relevantes, e então exibe um relatório de faturamento consolidado na tela. O relatório distingue entre notas faturadas e canceladas, agrupa os dados por filial, e fornece um resumo geral. A aplicação também oferece funcionalidades para imprimir o relatório ou exportar os dados para um arquivo CSV.
+Esta aplicação é uma ferramenta web para processar arquivos XML de Nota Fiscal Eletrônica (NFe). Ela permite que o usuário arraste e solte múltiplos arquivos XML, processa esses arquivos para extrair informações relevantes, e então exibe um relatório de faturamento consolidado na tela. O relatório distingue entre notas faturadas e canceladas, agrupa os dados por filial, e fornece um resumo geral. A aplicação também oferece funcionalidades para imprimir o relatório, exportar os dados para um arquivo CSV e excluir linhas específicas do relatório antes de finalizá-lo.
 
 ## Estilo e Design
 
 - **Layout:** Moderno, limpo e responsivo, com um cabeçalho claro, uma área de upload de arquivos bem definida e um contêiner para o relatório gerado.
-- **Cores:** Utiliza uma paleta de cores profissional, com tons de verde (#199B8E) para destaque e ações primárias, cinzas para texto e fundos suaves (#f4f7f6).
+- **Cores:** Utiliza uma paleta de cores profissional, com tons de verde (#199B8E) para destaque e ações primárias, cinzas para texto e fundos suaves (#f4f7f6), e vermelho (#d93025) para ações de exclusão.
 - **Tipografia:** Usa a fonte "Poppins" para uma aparência moderna e legível.
 - **Componentes:**
     - **Cabeçalho:** Contém o logo da empresa (se disponível) e o título do relatório com a data atual.
     - **Área de Upload:** Uma zona de "arrastar e soltar" interativa que também funciona como um botão de clique para selecionar arquivos. A área muda de cor para dar feedback visual quando um arquivo é arrastado sobre ela.
-    - **Botões de Ação:** Botões para "Imprimir Relatório" e "Exportar para CSV" que aparecem após o processamento dos arquivos.
-    - **Tabela de Relatório:** Exibe os dados de forma clara, com cabeçalhos fixos e linhas alternadas. Notas canceladas são visualmente destacadas.
+    - **Botões de Ação:** Botões para "Imprimir Relatório", "Exportar para CSV" e "Excluir Linhas" que aparecem após o processamento dos arquivos.
+    - **Tabela de Relatório:** Exibe os dados de forma clara, com cabeçalhos fixos e linhas alternadas. Cada linha possui um checkbox para seleção. Notas canceladas são visualmente destacadas.
     - **Resumos:** Seções de resumo para totais por filial e um resumo geral do faturamento.
 - **Efeitos:** Sombras sutis (`box-shadow`) são usadas para criar uma sensação de profundidade e destacar os elementos principais.
 
@@ -38,11 +38,17 @@ Esta aplicação é uma ferramenta web para processar arquivos XML de Nota Fisca
     - Apresenta um resumo geral com o total de notas faturadas e o valor total do faturamento.
     - Mostra mensagens de erro caso algum arquivo XML seja inválido ou não possa ser lido.
 
-5.  **Impressão:**
-    - Um botão "Imprimir Relatório" formata a página para uma versão otimizada para impressão, removendo elementos de interface como botões e a área de upload.
+5.  **Exclusão de Linhas do Relatório:**
+    - **Seleção:** Uma caixa de seleção (checkbox) é adicionada a cada linha do relatório de notas faturadas. Uma caixa "selecionar tudo" no cabeçalho da tabela permite marcar ou desmarcar todas as notas de uma vez.
+    - **Botão de Exclusão:** Um botão "Excluir Linhas" permite ao usuário remover as notas selecionadas.
+    - **Recálculo Automático:** Ao clicar no botão, as linhas selecionadas são removidas da visualização e todos os totais (por filial e o resumo geral) são recalculados e atualizados instantaneamente.
+    - A exclusão é apenas na visualização; os dados originais não são perdidos até que um novo upload seja feito.
 
-6.  **Exportação para CSV:**
-    - Um botão "Exportar para CSV" gera um arquivo CSV com todos os dados processados, que pode ser aberto em planilhas como Excel ou Google Sheets.
+6.  **Impressão:**
+    - Um botão "Imprimir Relatório" formata a página para uma versão otimizada para impressão, removendo elementos de interface como botões, a área de upload e as caixas de seleção.
+
+7.  **Exportação para CSV:**
+    - Um botão "Exportar para CSV" gera um arquivo CSV com os dados processados (incluindo as exclusões feitas), que pode ser aberto em planilhas como Excel ou Google Sheets.
 
 ## Correções e Melhorias
 
