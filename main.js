@@ -229,6 +229,7 @@ class NfeReportGenerator extends HTMLElement {
 
                     const getValue = (context, tag) => context?.getElementsByTagName(tag)[0]?.textContent;
 
+                    const ide = infNFe.getElementsByTagName('ide')[0];
                     const emit = infNFe.getElementsByTagName('emit')[0];
                     const dest = infNFe.getElementsByTagName('dest')[0];
                     const total = infNFe.getElementsByTagName('total')[0];
@@ -241,7 +242,8 @@ class NfeReportGenerator extends HTMLElement {
                     this.reportData.push({
                         filial: getValue(emit, 'xNome') || 'N/A',
                         filialUF: getValue(emit.getElementsByTagName('enderEmit')[0], 'UF') || 'N/A',
-                        numeroNota: getValue(infNFe.getElementsByTagName('ide')[0], 'nNF') || 'N/A',
+                        numeroNota: getValue(ide, 'nNF') || 'N/A',
+                        naturezaOperacao: getValue(ide, 'natOp') || 'N/A',
                         cliente: getValue(dest, 'xNome') || 'N/A',
                         cidade: getValue(dest.getElementsByTagName('enderDest')[0], 'xMun') || 'N/A',
                         estado: getValue(dest.getElementsByTagName('enderDest')[0], 'UF') || 'N/A',
@@ -310,7 +312,7 @@ class NfeReportGenerator extends HTMLElement {
 
             Object.keys(groupedByFilial).sort().forEach(filialKey => {
                 html += `<h3>${filialKey}</h3>`;
-                html += '<table><thead><tr><th><input type="checkbox" id="select-all"></th><th>Nº Nota</th><th>Cliente</th><th>Cidade/UF</th><th>Contrib.</th><th>Frete</th><th>DIFAL</th><th>Valor Faturado</th></tr></thead><tbody>';
+                html += '<table><thead><tr><th><input type="checkbox" id="select-all"></th><th>Nº Nota</th><th>Natureza da Operação</th><th>Cliente</th><th>Cidade/UF</th><th>Contrib.</th><th>Frete</th><th>DIFAL</th><th>Valor Faturado</th></tr></thead><tbody>';
                 let subtotalFilial = 0;
                 let subtotalDifal = 0;
                 let subtotalFrete = 0;
@@ -321,6 +323,7 @@ class NfeReportGenerator extends HTMLElement {
                     html += `<tr>
                         <td><input type="checkbox" class="row-checkbox" value="${item.numeroNota}"></td>
                         <td>${item.numeroNota}</td>
+                        <td>${item.naturezaOperacao}</td>
                         <td>${item.cliente}</td>
                         <td>${item.cidade}/${item.estado}</td>
                         <td>${item.contribuinte}</td>
@@ -390,13 +393,14 @@ class NfeReportGenerator extends HTMLElement {
     }
 
     exportToCsv(data) {
-        const headers = ["Filial", "UF Filial", "Nº Nota", "Cliente", "Cidade/UF Cliente", "Contribuinte", "Frete", "Valor DIFAL (R$)", "Valor Faturado (R$)", "Status"];
+        const headers = ["Filial", "UF Filial", "Nº Nota", "Natureza da Operação", "Cliente", "Cidade/UF Cliente", "Contribuinte", "Frete", "Valor DIFAL (R$)", "Valor Faturado (R$)", "Status"];
         const csvRows = data.map(item => {
             const status = item.isCanceled ? 'Cancelada' : 'Faturada';
             const values = [
                 item.filial,
                 item.filialUF,
                 item.numeroNota,
+                item.naturezaOperacao,
                 item.cliente,
                 `${item.cidade}/${item.estado}`,
                 item.contribuinte,
