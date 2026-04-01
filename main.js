@@ -81,18 +81,46 @@ class NfeParserService {
                     const modFrete = getValue(transp, 'modFrete');
                     
                     const naturezaOperacaoRaw = getValue(ide, 'natOp') || 'N/A';
-                    const natOpUpper = naturezaOperacaoRaw.toUpperCase();
+                    const natOpUpper = (getValue(ide, 'natOp') || 'N/A').toUpperCase();
+                    let natureType = 'OUTROS';
+
+                    if (natOpUpper.includes('VENDA') || natOpUpper.includes('LOCA') || natOpUpper.includes('PREST')) {
+                        natureType = (natOpUpper.includes('LOCA') || natOpUpper.includes('ALUG')) ? 'LOCAÇÃO' : 'VENDA';
+                    } else if (natOpUpper.includes('TRANSF') || natOpUpper.includes('REMESSA P/ FILIAL')) {
+                        natureType = 'TRANSFERÊNCIA';
+                    } else if (natOpUpper.includes('AMOSTRA') || natOpUpper.includes('BRINDE') || natOpUpper.includes('BONIF')) {
+                        natureType = 'AMOSTRA/BRINDE';
+                    } else if (natOpUpper.includes('DEVOLU')) {
+                        natureType = 'DEVOLUÇÃO';
+                    } else if (natOpUpper.includes('RETORNO')) {
+                        natureType = 'RETORNO';
+                    }
+
+                    const cnpjEmit = getValue(emit, 'CNPJ');
+                    let branchName = getValue(emit, 'xNome') || 'N/A';
                     
+                    if (cnpjEmit === '05502390000111') branchName = 'MATRIZ (CE)';
+                    else if (cnpjEmit === '05502390000200') branchName = 'FILIAL (SC)';
+                    else if (cnpjEmit === '05502390000383' || cnpjEmit?.includes('383')) branchName = 'FILIAL (SP)';
+
                     resolve({
-                        filial: getValue(emit, 'xNome') || 'N/A',
+                        filial: branchName,
                         filialUF: getValue(emit.getElementsByTagName('enderEmit')[0], 'UF') || 'N/A',
                         numeroNota: getValue(ide, 'nNF') || 'N/A',
-                        naturezaOperacao: naturezaOperacaoRaw,
-                        isRevenue: (natOpUpper.includes('VENDA') || natOpUpper.includes('LOCA')) && !natOpUpper.includes('DEVOLU') && !natOpUpper.includes('RETORNO'),
-                        isDemo: natOpUpper.includes('DEMONS'),
-                        isDevolucao: natOpUpper.includes('DEVOLU'),
-                        isRetorno: natOpUpper.includes('RETORNO'),
-                        cliente: getValue(dest, 'xNome') || 'N/A',
+                        naturezaOperacao: natureType,
+                        naturezaOriginal: natOpUpper,
+                        isRevenue: (natureType === 'VENDA' || natureType === 'LOCAÇÃO'),
+                        isDemo: natureType === 'AMOSTRA/BRINDE',
+                        isDevolucao: natureType === 'DEVOLUÇÃO',
+                        isTransfer: natureType === 'TRANSFERÊNCIA',
+                        cliente: (() => {
+                            const cnpjDest = getValue(dest, 'CNPJ');
+                            const nameDest = getValue(dest, 'xNome') || 'N/A';
+                            if (cnpjDest === '05502390000111') return `MATRIZ (CE) - ${nameDest}`;
+                            if (cnpjDest === '05502390000200') return `FILIAL (SC) - ${nameDest}`;
+                            if (cnpjDest === '05502390000383' || cnpjDest?.includes('383')) return `FILIAL (SP) - ${nameDest}`;
+                            return nameDest;
+                        })(),
                         cidade: getValue(dest.getElementsByTagName('enderDest')[0], 'xMun') || 'N/A',
                         estado: getValue(dest.getElementsByTagName('enderDest')[0], 'UF') || 'N/A',
                         contribuinte: { '1': 'Sim', '2': 'Isento', '9': 'Não' }[getValue(dest, 'indIEDest')] || 'N/I',
@@ -266,284 +294,421 @@ class NfeReportGenerator extends HTMLElement {
     render() {
         this.shadowRoot.innerHTML = `
             <style>
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@400;700;900&display=swap');
+
                 :host {
+                    --accent: #0d9488;
+                    --accent-glow: rgba(13, 148, 136, 0.4);
+                    --bg: #f8fafc;
+                    --panel: rgba(255, 255, 255, 0.8);
+                    --border: rgba(226, 232, 240, 0.8);
+                    --noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+                }
+
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                
+                .app-container {
                     display: grid;
-                    grid-template-columns: 260px 1fr;
-                    grid-template-rows: 100vh;
-                    font-family: 'Poppins', sans-serif;
-                    background: #f8fafc;
+                    grid-template-columns: 240px 1fr;
+                    height: 100vh;
+                    background-color: var(--bg);
+                    background-image: var(--noise);
+                    background-blend-mode: overlay;
+                    font-family: 'Inter', sans-serif;
                     overflow: hidden;
                 }
 
+                /* SIDEBAR LUXURY */
                 aside {
-                    background: #0d8377;
+                    background: #0f172a;
                     color: white;
+                    padding: 2rem 1.2rem;
                     display: flex;
                     flex-direction: column;
-                    padding: 2.5rem 1.5rem;
-                    z-index: 100;
-                    box-shadow: 10px 0 30px rgba(0,0,0,0.05);
+                    gap: 1.5rem;
+                    box-shadow: 15px 0 40px rgba(0,0,0,0.1);
+                    z-index: 50;
+                    position: relative;
                 }
 
-                .brand {
+                .brand-zone {
                     display: flex;
                     align-items: center;
-                    gap: 15px;
-                    margin-bottom: 4rem;
+                    gap: 16px;
+                    margin-bottom: 2rem;
                 }
 
                 .brand-logo {
-                    width: 44px; height: 44px;
-                    background: rgba(255,255,255,0.2);
-                    backdrop-filter: blur(10px);
-                    border-radius: 14px;
-                    display: flex; align-items: center; justify-content: center;
-                    font-weight: 900; font-size: 1.4rem;
-                    border: 1px solid rgba(255,255,255,0.3);
+                    width: 48px; height: 48px;
+                    background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+                    border-radius: 16px;
+                    display: grid; place-items: center;
+                    font-family: 'Outfit', sans-serif;
+                    font-weight: 900; font-size: 1.5rem;
+                    box-shadow: 0 10px 20px rgba(13, 148, 136, 0.3);
                 }
-
-                nav { display: flex; flex-direction: column; gap: 12px; flex: 1; }
 
                 .nav-item {
-                    display: flex; align-items: center; gap: 15px;
-                    padding: 15px 20px; border-radius: 16px;
-                    color: rgba(255,255,255,0.7); font-weight: 600;
-                    cursor: pointer; border: none; background: transparent;
-                    transition: all 0.3s; width: 100%; text-align: left;
+                    padding: 16px 20px;
+                    border-radius: 16px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 16px;
+                    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+                    font-weight: 600;
+                    color: #94a3b8;
+                    border: 1px solid transparent;
+                    background: transparent;
+                    width: 100%;
+                    text-align: left;
                 }
 
-                .nav-item:hover { background: rgba(255,255,255,0.1); color: white; }
-                .nav-item.active { background: white; color: #0d8377; box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
-
-                main { padding: 3.5rem; overflow-y: auto; }
-
-                .view { display: none; animation: slideUp 0.5s ease-out; }
-                .view.active { display: block; }
-
-                h1 { font-size: 2.6rem; font-weight: 800; letter-spacing: -1.5px; color: #0f172a; margin: 0 0 0.5rem 0; }
-                header p { color: #64748b; font-size: 1.1rem; margin-bottom: 3rem; }
-
-                .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2.5rem; }
-                .kpi-card { 
-                    background: white; padding: 2rem; border-radius: 28px; 
-                    border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
+                .nav-item:hover { background: rgba(255,255,255,0.05); color: white; transform: translateX(5px); }
+                .nav-item.active { 
+                    background: #1e293b; 
+                    color: #5eead4; 
+                    border: 1px solid rgba(255,255,255,0.1);
+                    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+                    position: relative;
                 }
-                .kpi-label { font-size: 0.8rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 1rem; }
-                .kpi-value { font-size: 2.2rem; font-weight: 800; color: #0f172a; line-height: 1; margin-bottom: 0.5rem; }
-                .kpi-footer { font-size: 0.9rem; font-weight: 700; display: flex; align-items: center; gap: 6px; }
-                .kpi-footer.up { color: #10b981; }
-                .kpi-footer.down { color: #ef4444; }
-
-                .card { background: white; border-radius: 28px; padding: 2.5rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.03); border: 1px solid #e2e8f0; margin-bottom: 2rem; }
-                .card h3 { margin: 0 0 2rem 0; font-size: 1.4rem; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 12px; }
-
-                .importer-zone {
-                    padding: 5rem; border: 3px dashed #cbd5e1; border-radius: 35px;
-                    background: #f8fafc; text-align: center; transition: all 0.4s; cursor: pointer;
+                .nav-item.active::after {
+                    content: ''; position: absolute; left: -10px; width: 4px; height: 24px; background: #5eead4; border-radius: 10px; box-shadow: 0 0 15px #5eead4;
                 }
-                .importer-zone:hover { border-color: #0d8377; background: #f0fdfb; transform: scale(1.01); }
 
+                /* MAIN SURFACE */
+                main {
+                    padding: 2rem;
+                    overflow-y: auto;
+                    position: relative;
+                    scroll-behavior: smooth;
+                    background: radial-gradient(circle at top right, rgba(20, 184, 166, 0.03) 0%, transparent 40%);
+                }
+
+                .view { display: none; max-width: 1400px; margin: 0 auto; }
+                .view.active { display: block; animation: viewEnter 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+                /* HIDE FILTERS ON CONFIG VIEW */
+                #view-config.active ~ .filter-wrapper,
+                main:has(#view-config.active) .global-filter-bar { display: none; }
+                
+                /* Alternative for older browsers or simple visibility control */
+                :host([active-view="config"]) .global-filter-bar { display: none; }
+
+                @keyframes viewEnter {
+                    from { transform: translateY(40px); opacity: 0; filter: blur(10px); }
+                    to { transform: translateY(0); opacity: 1; filter: blur(0); }
+                }
+
+                h1 { font-family: 'Outfit', sans-serif; font-size: 2.2rem; font-weight: 900; color: #0f172a; letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 0.5rem; }
+                header p { color: #64748b; font-size: 1rem; font-weight: 500; }
+
+                /* GLASSMORPHIC CARDS */
+                .glass-card {
+                    background: var(--panel);
+                    backdrop-filter: blur(16px);
+                    -webkit-backdrop-filter: blur(16px);
+                    border: 1px solid var(--border);
+                    border-radius: 24px;
+                    padding: 1.5rem;
+                    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02), 0 10px 25px -5px rgba(0,0,0,0.05);
+                    margin-bottom: 1.5rem;
+                    position: relative;
+                    overflow: hidden;
+                }
+
+                .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.2rem; margin-bottom: 2rem; }
+                
+                .chart-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1.2rem; margin-bottom: 2rem; align-items: start; }
+                @media (max-width: 1200px) { .chart-grid { grid-template-columns: 1fr; } }
+
+                .kpi-stat {
+                    background: white; border-radius: 20px; padding: 1.2rem;
+                    border: 1px solid #f1f5f9;
+                    display: flex; flex-direction: column; justify-content: space-between;
+                    min-height: 120px;
+                    transition: all 0.5s ease;
+                    position: relative;
+                }
+                .kpi-stat:hover { transform: translateY(-4px); box-shadow: 0 15px 30px rgba(0,0,0,0.05); }
+                
+                .kpi-stat::before {
+                    content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 6px; background: linear-gradient(90deg, var(--accent), transparent);
+                }
+
+                .kpi-title { font-size: 0.85rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; }
+                .kpi-value { 
+                    font-family: 'Outfit', sans-serif; 
+                    font-size: 1.6rem; 
+                    font-weight: 800; 
+                    color: #0f172a; 
+                    margin: 8px 0; 
+                    letter-spacing: -1px; 
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 100%;
+                }
+                
+                /* BUTTONS PREMIER */
                 .btn {
-                    padding: 16px 32px; border-radius: 18px; font-weight: 700;
-                    cursor: pointer; border: none; transition: all 0.2s; font-family: inherit;
+                    padding: 10px 20px; border-radius: 12px; font-weight: 700;
+                    cursor: pointer; border: none; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+                    font-family: inherit; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px;
                 }
-                .btn-primary { background: #0d8377; color: white; box-shadow: 0 10px 20px rgba(13, 131, 119, 0.2); }
-                .btn-primary:hover { background: #115e59; transform: translateY(-3px); box-shadow: 0 15px 30px rgba(13, 131, 119, 0.3); }
+                .btn-primary { background: #0f172a; color: white; box-shadow: 0 10px 20px rgba(15, 23, 42, 0.1); }
+                .btn-primary:hover { background: #1e293b; transform: translateY(-2px); box-shadow: 0 15px 30px rgba(15, 23, 42, 0.15); }
 
-                table { width: 100%; border-collapse: collapse; }
-                th { text-align: left; padding: 1.5rem 1rem; background: #f8fafc; color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 800; border-bottom: 2px solid #f1f5f9; }
-                td { padding: 1.5rem 1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.95rem; }
-                tr:hover td { background: #f9fdfc; }
+                /* TABLE LUXE */
+                table { width: 100%; border-collapse: separate; border-spacing: 0 10px; }
+                th { color: #64748b; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; padding: 1rem; border: none; }
+                td { background: white; padding: 1rem 1.2rem; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; transition: all 0.3s; font-size: 0.85rem; }
+                td:first-child { border-left: 1px solid #f1f5f9; border-radius: 16px 0 0 16px; }
+                td:last-child { border-right: 1px solid #f1f5f9; border-radius: 0 16px 16px 0; }
+                tr:hover td { transform: scale(1.005); box-shadow: 0 4px 12px rgba(0,0,0,0.02); z-index: 10; }
 
-                @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+                /* FORMS LUX */
+                select, input {
+                    background: white; border: 1.5px solid #f1f5f9; border-radius: 12px;
+                    padding: 10px 16px; font-weight: 600; color: #1e293b; transition: all 0.3s; font-size: 0.8rem;
+                }
+                select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 5px var(--accent-glow); outline: none; }
 
                 .toast-container { position: fixed; bottom: 3rem; right: 3rem; z-index: 1000; }
-                .toast { padding: 1.5rem 2.5rem; background: #1e293b; color: white; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 15px; font-weight: 600; margin-top: 1rem; animation: slideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
-                @keyframes slideIn { from { transform: translateX(150%); } to { transform: translateX(0); } }
+                .toast { 
+                    padding: 20px 32px; background: white; color: #0f172a; border-radius: 24px; 
+                    box-shadow: 0 40px 80px -20px rgba(0,0,0,0.3); border: 1px solid #f1f5f9;
+                    display: flex; align-items: center; gap: 20px; font-weight: 700;
+                    animation: toastIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                }
+                @keyframes toastIn { from { transform: translateX(100%) scale(0.8); opacity: 0; } to { transform: translateX(0) scale(1); opacity: 1; } }
+
+                @media print { aside { display:none; } .app-container { grid-template-columns: 1fr; } }
             </style>
 
-            <aside>
-                <div class="brand">
-                    <div class="brand-logo">M</div>
-                    <div class="brand-name">MCI Business</div>
-                </div>
-                
-                <div style="margin-bottom: 2rem; padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 16px;">
-                    <p style="font-size: 0.7rem; font-weight: 800; opacity: 0.7; margin-bottom: 12px; letter-spacing: 1px;">PERÍODO DE ANÁLISE</p>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                        <select id="select-month" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px; border-radius: 8px; font-family: inherit; font-weight: 600;">
-                            <option value="01">Jan</option><option value="02">Fev</option><option value="03">Mar</option>
-                            <option value="04">Abr</option><option value="05">Mai</option><option value="06">Jun</option>
-                            <option value="07">Jul</option><option value="08">Ago</option><option value="09">Set</option>
-                            <option value="10">Out</option><option value="11">Nov</option><option value="12">Dez</option>
-                        </select>
-                        <select id="select-year" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px; border-radius: 8px; font-family: inherit; font-weight: 600;">
-                            <option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option>
-                        </select>
+            <div class="app-container">
+                <aside>
+                    <div class="brand-zone">
+                        <div class="brand-logo">M</div>
+                        <div>
+                            <div style="font-family: 'Outfit', sans-serif; font-weight: 900; font-size: 1.4rem; letter-spacing: -1px;">MCI Intelligence</div>
+                            <div style="font-size: 0.6rem; text-transform: uppercase; letter-spacing: 2px; color: #475569; font-weight: 900;">Elite BI Platform</div>
+                        </div>
                     </div>
-                </div>
 
-                <nav>
-                    <button class="nav-item active" data-view="dashboard">📊 Dashboard</button>
-                    <button class="nav-item" data-view="reports">📋 Relatórios</button>
-                    <button class="nav-item" data-view="config">⚙️ Configurações</button>
-                </nav>
-                <div style="margin-top:auto; font-size: 0.8rem; opacity: 0.6;">MCI Business Intelligence</div>
-            </aside>
+                    <div style="margin-bottom: 2rem; padding: 1.5rem; background: rgba(255,255,255,0.03); border-radius: 24px; border: 1px solid rgba(255,255,255,0.05);">
+                        <p style="font-size: 0.65rem; font-weight: 900; color: #475569; margin-bottom: 12px; letter-spacing: 2px;">PERÍODO FISCAL</p>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <select id="select-month" style="background: #1e293b; border: none; color: white; font-size: 0.8rem;">
+                                <option value="01">Janeiro</option><option value="02">Fevereiro</option><option value="03" selected>Março</option>
+                                <option value="04">Abril</option><option value="05">Maio</option><option value="06">Junho</option>
+                                <option value="07">Julho</option><option value="08">Agosto</option><option value="09">Setembro</option>
+                                <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+                            </select>
+                            <select id="select-year" style="background: #1e293b; border: none; color: white; font-size: 0.8rem;">
+                                <option value="2024">2024</option><option value="2025">2025</option><option value="2026" selected>2026</option>
+                            </select>
+                        </div>
+                    </div>
 
-            <main>
-                <div id="view-dashboard" class="view active">
+                    <nav>
+                        <button class="nav-item active" data-view="dashboard">🏠 Dashboard Elite</button>
+                        <button class="nav-item" data-view="reports">📑 Auditoria Fiscal</button>
+                        <button class="nav-item" data-view="config">⚙️ Controladoria</button>
+                    </nav>
+
+                    <div style="margin-top: auto; background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 100%); padding: 1.5rem; border-radius: 24px; border: 1px solid rgba(255,255,255,0.05);">
+                        <div style="font-size: 0.7rem; color: #475569; font-weight: 800; margin-bottom: 8px;">CONEXÃO SYNC</div>
+                        <div style="display:flex; align-items: center; gap: 10px;">
+                            <div style="width: 10px; height: 10px; background: #2dd4bf; border-radius: 50%; box-shadow: 0 0 15px #2dd4bf;"></div>
+                            <span style="font-size: 0.8rem; font-weight: 700; color: #94a3b8;">Nuvem Ativa</span>
+                        </div>
+                    </div>
+                </aside>
+
+                <main>
                     <header>
                         <div style="display:flex; justify-content: space-between; align-items: flex-end; width: 100%;">
                             <div>
                                 <h1 id="welcome-title">Visão Estratégica</h1>
                                 <p id="dashboard-date"></p>
                             </div>
-                            <div style="display:flex; gap: 10px;">
-                                <button class="btn btn-primary" id="sync-cloud-main-btn" style="padding: 10px 20px; font-size: 0.8rem;">☁️ Sync Cloud</button>
+                            <div style="display:flex; gap: 15px;">
+                                <button class="btn btn-primary" id="sync-cloud-main-btn" style="box-shadow: 0 10px 30px rgba(0,0,0,0.2);">☁️ Sync Cloud</button>
                             </div>
                         </div>
                     </header>
 
-                    <!-- BARRA DE FILTROS ELITE -->
-                    <div style="background: white; border-radius: 20px; padding: 1.5rem; margin-bottom: 2rem; border: 1px solid #e2e8f0; display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr; gap: 15px; align-items: flex-end; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                    <!-- BARRA DE FILTROS ELITE (Global) -->
+                    <div class="glass-card global-filter-bar" id="global-filter-zone" style="display: grid; grid-template-columns: 2fr 1.2fr 1.2fr 1.2fr 1.2fr 1fr 1fr; gap: 12px; align-items: flex-end; padding: 1.2rem; margin-bottom: 2rem;">
                         <div>
-                            <label style="font-size: 0.7rem; font-weight: 800; color: #64748b; margin-bottom: 6px; display: block; text-transform: uppercase;">Busca Rápida (Cliente/Nota)</label>
-                            <input type="text" id="filter-search" placeholder="Pesquisar..." style="width:100%; padding: 10px; border: 1.5px solid #f1f5f9; border-radius: 10px; background:#f8fafc; font-family: inherit;">
+                            <label style="font-size: 0.65rem; font-weight: 800; color: #64748b; margin-bottom: 6px; display: block; text-transform: uppercase;">Busca Rápida</label>
+                            <input type="text" id="filter-search" placeholder="Cliente ou Nota..." style="width:100%;">
                         </div>
                         <div>
-                            <label style="font-size: 0.7rem; font-weight: 800; color: #64748b; margin-bottom: 6px; display: block; text-transform: uppercase;">Filtrar Vendedor</label>
-                            <select id="filter-vendedor" style="width:100%; padding: 10px; border: 1.5px solid #f1f5f9; border-radius: 10px; background:#f8fafc; font-weight: 600;">
-                                <option value="">Todos Vendedores</option>
+                            <label style="font-size: 0.65rem; font-weight: 900; color: #64748b; margin-bottom: 8px; display: block; text-transform: uppercase;">Unidade</label>
+                            <select id="filter-filial" style="width:100%;">
+                                <option value="">Todas</option>
                             </select>
                         </div>
                         <div>
-                            <label style="font-size: 0.7rem; font-weight: 800; color: #64748b; margin-bottom: 6px; display: block; text-transform: uppercase;">Filtrar Estado (UF)</label>
-                            <select id="filter-estado" style="width:100%; padding: 10px; border: 1.5px solid #f1f5f9; border-radius: 10px; background:#f8fafc; font-weight: 600;">
-                                <option value="">Todos os Estados</option>
+                            <label style="font-size: 0.65rem; font-weight: 900; color: #64748b; margin-bottom: 8px; display: block; text-transform: uppercase;">Natureza</label>
+                            <select id="filter-natureza" style="width:100%;">
+                                <option value="">Todas</option>
+                                <option value="VENDA">Vendas</option>
+                                <option value="LOCAÇÃO">Locação</option>
+                                <option value="TRANSFERÊNCIA">Transferência</option>
+                                <option value="AMOSTRA/BRINDE">Amostras/Brindes</option>
+                                <option value="DEVOLUÇÃO">Devolução</option>
                             </select>
                         </div>
                         <div>
-                            <label style="font-size: 0.7rem; font-weight: 800; color: #64748b; margin-bottom: 6px; display: block; text-transform: uppercase;">Logística (Frete)</label>
-                            <select id="filter-frete" style="width:100%; padding: 10px; border: 1.5px solid #f1f5f9; border-radius: 10px; background:#f8fafc; color: #0d8377; font-weight: 800;">
-                                <option value="all">Todas Operações</option>
-                                <option value="with">Apenas com Frete</option>
-                                <option value="without">Frete Grátis/Nulo</option>
+                            <label style="font-size: 0.65rem; font-weight: 900; color: #64748b; margin-bottom: 8px; display: block; text-transform: uppercase;">Vendedor</label>
+                            <select id="filter-vendedor" style="width:100%;">
+                                <option value="">Todos</option>
                             </select>
                         </div>
                         <div>
-                            <label style="font-size: 0.7rem; font-weight: 800; color: #64748b; margin-bottom: 6px; display: block; text-transform: uppercase;">Impostos (Difal)</label>
-                            <select id="filter-difal" style="width:100%; padding: 10px; border: 1.5px solid #f1f5f9; border-radius: 10px; background:#f8fafc; color: #3b82f6; font-weight: 800;">
-                                <option value="all">Faturamento Total</option>
-                                <option value="with">Apenas com DIFAL</option>
+                            <label style="font-size: 0.65rem; font-weight: 900; color: #64748b; margin-bottom: 8px; display: block; text-transform: uppercase;">UF Destino</label>
+                            <select id="filter-estado" style="width:100%;">
+                                <option value="">Ver Todas</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.65rem; font-weight: 800; color: #64748b; margin-bottom: 6px; display: block; text-transform: uppercase;">Frete</label>
+                            <select id="filter-frete" style="width:100%; border-color: #ccfbf1; background: #f0fdfa;">
+                                <option value="all">LOG</option>
+                                <option value="with">COM</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.65rem; font-weight: 800; color: #64748b; margin-bottom: 6px; display: block; text-transform: uppercase;">Difal</label>
+                            <select id="filter-difal" style="width:100%; border-color: #dbeafe; background: #eff6ff;">
+                                <option value="all">FISC</option>
+                                <option value="with">DIF</option>
                             </select>
                         </div>
                     </div>
 
-                    <div class="kpi-grid">
-                        <div class="kpi-card" style="border-top: 4px solid #10b981;">
-                            <span class="kpi-label">Faturado Hoje</span>
-                            <div class="kpi-value" id="kpi-today">R$ 0,00</div>
-                            <div class="kpi-footer" id="kpi-today-sub">Aguardando importação...</div>
-                        </div>
-                        <div class="kpi-card">
-                            <span class="kpi-label">Faturamento Mensal</span>
-                            <div class="kpi-value" id="kpi-faturado">R$ 0,00</div>
-                            <div class="kpi-footer" id="kpi-faturado-sub">Consolidado Real</div>
-                        </div>
-                        <div class="kpi-card">
-                            <span class="kpi-label">Atingimento Meta</span>
-                            <div class="kpi-value" id="kpi-percentage">0%</div>
-                            <div class="kpi-footer" id="kpi-percentage-sub">---</div>
-                        </div>
-                        <div class="kpi-card">
-                            <span class="kpi-label">Projeção Fechamento</span>
-                            <div class="kpi-value" id="kpi-forecast">R$ 0,00</div>
-                            <div class="kpi-footer" id="kpi-forecast-sub">No ritmo atual</div>
-                        </div>
-                    </div>
+                    <div id="view-dashboard" class="view active">
 
-                    <div class="card">
-                        <h3>📈 Tendência Diária de Vendas</h3>
-                        <div style="height: 400px;"><canvas id="line-chart"></canvas></div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
-                        <div class="card">
-                            <h3>🏆 Performance de Vendedores</h3>
-                            <div id="ranking-list"></div>
-                        </div>
-                        <div class="card">
-                            <h3>🏢 Representatividade por Unidade</h3>
-                            <div style="height: 300px;"><canvas id="pie-chart"></canvas></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="view-reports" class="view">
-                    <header>
-                        <h1>Detalhamento Fiscal</h1>
-                        <p>Consolidado de todas as operações ativas no sistema</p>
-                    </header>
-                    <div class="card">
-                        <div style="display: flex; gap: 15px; margin-bottom: 2rem;">
-                            <button class="btn btn-primary" id="export-btn">📥 Exportar Dados</button>
-                            <button class="btn" style="background:#f1f5f9; color:#475569" id="print-btn">🖨️ PDF/Impressão</button>
-                        </div>
-                        <div id="table-container"></div>
-                    </div>
-                </div>
-
-                <div id="view-config" class="view">
-                    <header>
-                        <h1>Configuração & Importação</h1>
-                        <p>Gerenciamento de dados e conexões com a nuvem</p>
-                    </header>
-
-                        <div class="card" style="text-align: center;">
-                            <h3>📥 Importar Manifestos (XML/JSON)</h3>
-                            <div style="margin-bottom: 2rem; display: flex; justify-content: center; gap: 10px;">
-                                <div style="text-align: left;">
-                                    <label style="font-size: 0.7rem; font-weight: 800; color: #64748b; margin-bottom: 4px; display: block;">Mês Destino (JSON/Manual)</label>
-                                    <select id="import-month" style="padding: 8px; border-radius: 10px; border: 1px solid #e2e8f0; font-family: inherit;">
-                                        <option value="01">Jan</option><option value="02">Fev</option><option value="03">Mar</option>
-                                        <option value="04">Abr</option><option value="05">Mai</option><option value="06">Jun</option>
-                                        <option value="07">Jul</option><option value="08">Ago</option><option value="09">Set</option>
-                                        <option value="10">Out</option><option value="11">Nov</option><option value="12">Dez</option>
-                                    </select>
-                                </div>
-                                <div style="text-align: left;">
-                                    <label style="font-size: 0.7rem; font-weight: 800; color: #64748b; margin-bottom: 4px; display: block;">Ano Destino</label>
-                                    <select id="import-year" style="padding: 8px; border-radius: 10px; border: 1px solid #e2e8f0; font-family: inherit;">
-                                        <option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option>
-                                    </select>
+                        <div class="kpi-grid">
+                            <div class="kpi-stat">
+                                <span class="kpi-title">Faturado Hoje</span>
+                                <div class="kpi-value" id="kpi-today">R$ 0,00</div>
+                                <div class="kpi-sub" id="kpi-today-sub">Aguardando dados...</div>
+                            </div>
+                            <div class="kpi-stat" style="background: #0f172a; color: white;">
+                                <span class="kpi-title" style="color: #475569;">Faturado Mês</span>
+                                <div class="kpi-value" id="kpi-faturado" style="color: #5eead4;">R$ 0,00</div>
+                                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; overflow: hidden; justify-content: flex-start;">
+                                    <span style="font-size: 0.75rem; font-weight: 800; background: #5eead4; color: #0f172a; padding: 2px 8px; border-radius: 6px; flex-shrink: 0;" id="kpi-percentage">0%</span>
+                                    <span style="color: #475569; font-size: 0.7rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1;">atingimento</span>
                                 </div>
                             </div>
-                            <div class="importer-zone" id="drop-zone">
-                                <div style="font-size: 3rem; margin-bottom: 1.5rem;">📂</div>
-                                <p style="font-size: 1.2rem; font-weight: 700; margin-bottom: 2rem;">Arraste aqui os arquivos de <span style="color:#0d8377">Março</span> ou clique para selecionar</p>
-                                <button class="btn btn-primary" id="select-btn">Selecionar Arquivos</button>
+                            <div class="kpi-stat">
+                                <span class="kpi-title">Projeção Final</span>
+                                <div class="kpi-value" id="kpi-forecast">R$ 0,00</div>
+                                <div class="kpi-sub">Tendência baseada em ritmo</div>
+                            </div>
+                            <div class="kpi-stat">
+                                <span class="kpi-title">Unidades Ativas</span>
+                                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                    <span style="background: #f1f5f9; padding: 4px 8px; border-radius: 8px; font-size: 0.6rem; font-weight: 800;">MATRIZ</span>
+                                    <span style="background: #f1f5f9; padding: 4px 8px; border-radius: 8px; font-size: 0.6rem; font-weight: 800;">SC</span>
+                                    <span style="background: #f1f5f9; padding: 4px 8px; border-radius: 8px; font-size: 0.6rem; font-weight: 800;">SP</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="chart-grid">
+                            <div class="glass-card">
+                                <h3>📈 Tendência Diária de Vendas</h3>
+                                <div style="height: 280px; position: relative;">
+                                    <canvas id="mainChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="glass-card">
+                                <h3>🏆 Ranking de Performance</h3>
+                                <div id="ranking-container" class="ranking-list"></div>
+                            </div>
+                        </div>
+
+                        <div class="chart-grid" style="grid-template-columns: 1fr 1fr;">
+                            <div class="glass-card">
+                                <h3>🗺️ Estados (UF)</h3>
+                                <div style="height: 220px; position: relative;">
+                                    <canvas id="geoChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="glass-card">
+                                <h3>📊 Unidades</h3>
+                                <div style="height: 220px; position: relative;">
+                                    <canvas id="branchChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="view-reports" class="view">
+                        <div class="glass-card">
+                            <div style="display: flex; gap: 12px; margin-bottom: 1.5rem; justify-content: flex-end;">
+                                <button class="btn btn-primary" id="export-btn">📥 Exportação Estratégica</button>
+                                <button class="btn" style="background:white; color:#0f172a; border: 1px solid #e2e8f0;" id="print-btn">🖨️ PDF Corporativo</button>
+                            </div>
+                            <div id="table-container" style="overflow-x: auto;"></div>
+                        </div>
+                    </div>
+
+                    <div id="view-config" class="view">
+
+                        <div class="glass-card" style="text-align: center; background: radial-gradient(circle at center, #fff 0%, #f9fafb 100%);">
+                            <div class="importer-zone" id="drop-zone" style="max-width: 800px; margin: 0 auto;">
+                                <div style="font-size: 4rem; margin-bottom: 2rem; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.1));">📂</div>
                                 <input type="file" id="file-input" multiple style="display:none">
+                                <h2>Importar Arquivos Inteligentes</h2>
+                                <p style="color: #64748b; margin-bottom: 2.5rem; font-weight: 500;">O sistema processa XML de NF-e e JSON de faturamento simultaneamente</p>
+                                <button class="btn btn-primary" id="select-btn">Explorar Arquivos</button>
+                            </div>
+                            
+                            <div style="margin-top: 2.5rem; display: flex; justify-content: center; gap: 20px;">
+                                <div style="background: white; padding: 20px 35px; border-radius: 20px; border: 1px solid #f1f5f9; box-shadow: 0 10px 30px rgba(0,0,0,0.02);">
+                                    <label style="font-size: 0.65rem; font-weight: 900; color: #94a3b8; display: block; margin-bottom: 10px;">ID DA UNIDADE DESTINO</label>
+                                    <div style="display: flex; gap: 10px;">
+                                        <select id="import-month" style="padding: 10px; border-radius: 12px; font-size: 0.8rem;">
+                                            <option value="01">Jan</option><option value="02">Fev</option><option value="03" selected>Mar</option>
+                                            <option value="04">Abr</option><option value="05">Mai</option><option value="06">Jun</option>
+                                            <option value="07">Jul</option><option value="08">Ago</option><option value="09">Set</option>
+                                            <option value="10">Out</option><option value="11">Nov</option><option value="12">Dez</option>
+                                        </select>
+                                        <select id="import-year" style="padding: 10px; border-radius: 12px; font-size: 0.8rem;">
+                                            <option value="2024">2024</option><option value="2025">2025</option><option value="2026" selected>2026</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
-                        <div class="card">
-                            <h3>☁️ Nuvem Supabase</h3>
-                            <button class="btn btn-primary" id="sync-btn" style="width:100%; margin-bottom: 1rem;">🔄 Sincronizar Tudo com Cloud</button>
-                            <button class="btn" id="load-btn" style="width:100%; background:#f1f5f9; color:#0d8377; border:1px solid #e2e8f0;">☁️ Restaurar do Banco Remoto</button>
-                        </div>
-                        <div class="card">
-                            <h3>🎯 Meta de Faturamento</h3>
-                            <input type="number" id="goal-input" style="width:100%; padding: 18px; border: 2px solid #e2e8f0; border-radius: 18px; font-size: 1.4rem; font-weight: 800;" placeholder="R$ 0,00">
-                            <p style="margin-top: 1rem; color: #64748b; font-size: 0.9rem;">Meta usada para cálculo de projeção e atingimento.</p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem;">
+                            <div class="glass-card">
+                                <h3>☁️ Infraestrutura de Nuvem</h3>
+                                <p style="color: #64748b; margin-bottom: 2rem; font-size: 0.95rem;">Sincronização bidirecional com o banco de dados Supabase para segurança total.</p>
+                                <button class="btn btn-primary" id="sync-btn" style="width:100%; margin-bottom: 1rem;">🔄 Sincronizar Agora</button>
+                                <button class="btn" id="load-btn" style="width:100%; background:white; border: 1px solid #e2e8f0; color: #1e293b;">⚡ Restaurar do Backup</button>
+                            </div>
+                            <div class="glass-card" style="background: linear-gradient(135deg, white 0%, #f0fdfa 100%);">
+                                <h3>🎯 Planejamento de Metas</h3>
+                                <p style="color: #64748b; margin-bottom: 1.5rem; font-size: 0.95rem;">Defina a meta de faturamento mensal para cálculo de projeções.</p>
+                                <input type="number" id="goal-input" style="width:100%; font-size: 2.2rem; font-weight: 900; font-family: 'Outfit', sans-serif; text-align: center; border: 3px solid #ccfbf1;" placeholder="R$ 0,00">
+                            </div>
                         </div>
                     </div>
-                </div>
-            </main>
-            <div class="toast-container" id="toast-container"></div>
+                </main>
+                <div class="toast-container" id="toast-container"></div>
+            </div>
         `;
     }
+
 
     connectedCallback() {
         this.setupNavigation();
@@ -568,6 +733,20 @@ class NfeReportGenerator extends HTMLElement {
                 nav.classList.add('active');
                 this.shadowRoot.getElementById(`view-${target}`).classList.add('active');
                 this.currentView = target;
+                
+                const welcomeTitle = this.shadowRoot.getElementById('welcome-title');
+                if (welcomeTitle) {
+                    if (target === 'dashboard') welcomeTitle.textContent = 'Visão Estratégica';
+                    else if (target === 'reports') welcomeTitle.textContent = 'Auditoria Fiscal';
+                    else if (target === 'config') welcomeTitle.textContent = 'Configurações de BI';
+                }
+
+                // Update visibility of the global filter bar
+                const filterBar = this.shadowRoot.getElementById('global-filter-zone');
+                if (filterBar) {
+                    filterBar.style.display = (target === 'config') ? 'none' : 'grid';
+                }
+
                 this.updateUI();
             });
         });
@@ -610,7 +789,7 @@ class NfeReportGenerator extends HTMLElement {
         });
 
         // LISTENERS DE FILTROS ELITE
-        const filters = ['filter-search', 'filter-vendedor', 'filter-estado', 'filter-frete', 'filter-difal'];
+        const filters = ['filter-search', 'filter-filial', 'filter-natureza', 'filter-vendedor', 'filter-estado', 'filter-frete', 'filter-difal'];
         filters.forEach(id => {
             const el = shadow.getElementById(id);
             if (el) {
@@ -663,7 +842,9 @@ class NfeReportGenerator extends HTMLElement {
         const selYear = shadow.getElementById('select-year').value;
         const periodKey = `${selYear}-${selMonth}`;
 
-        const searchText = shadow.getElementById('filter-search').value.toLowerCase();
+        const filtSearch = shadow.getElementById('filter-search').value.toLowerCase();
+        const filtFilial = shadow.getElementById('filter-filial').value;
+        const filtNatureza = shadow.getElementById('filter-natureza').value;
         const filtVendedor = shadow.getElementById('filter-vendedor').value;
         const filtEstado = shadow.getElementById('filter-estado').value;
         const filtFrete = shadow.getElementById('filter-frete').value;
@@ -672,16 +853,17 @@ class NfeReportGenerator extends HTMLElement {
         // MULTI-LAYER FILTER LOGIC
         const rawPeriodData = this.reportData.filter(d => d && d.dataEmissao && d.dataEmissao.startsWith(periodKey));
         
-        // Update Filters Dynamic Content (Vendors/States for the period)
         this.populateDynamicFilters(rawPeriodData);
 
         const filteredData = rawPeriodData.filter(d => {
-            const matchesSearch = !searchText || (d.cliente.toLowerCase().includes(searchText) || d.numeroNota.includes(searchText));
+            const matchesSearch = !filtSearch || (d.cliente.toLowerCase().includes(filtSearch) || d.numeroNota.includes(filtSearch));
+            const matchesFilial = !filtFilial || d.filial === filtFilial;
+            const matchesNatureza = !filtNatureza || d.naturezaOperacao === filtNatureza;
             const matchesVendedor = !filtVendedor || d.vendedor === filtVendedor;
             const matchesEstado = !filtEstado || d.estado === filtEstado;
             const matchesFrete = filtFrete === 'all' || (filtFrete === 'with' ? d.valorFrete > 0 : d.valorFrete === 0);
             const matchesDifal = filtDifal === 'all' || (filtDifal === 'with' ? (d.difal > 0) : true);
-            return matchesSearch && matchesVendedor && matchesEstado && matchesFrete && matchesDifal;
+            return matchesSearch && matchesFilial && matchesNatureza && matchesVendedor && matchesEstado && matchesFrete && matchesDifal;
         });
 
         const billed = filteredData.filter(d => !d.isCanceled && d.isRevenue);
@@ -719,16 +901,23 @@ class NfeReportGenerator extends HTMLElement {
 
     populateDynamicFilters(data) {
         const shadow = this.shadowRoot;
+        const fSelect = shadow.getElementById('filter-filial');
         const vSelect = shadow.getElementById('filter-vendedor');
         const eSelect = shadow.getElementById('filter-estado');
         
+        const currentF = fSelect.value;
         const currentV = vSelect.value;
         const currentE = eSelect.value;
 
+        const filiais = [...new Set(data.map(d => d.filial))].sort();
         const vendedores = [...new Set(data.map(d => d.vendedor))].sort();
         const estados = [...new Set(data.map(d => d.estado))].filter(Boolean).sort();
 
-        // Prevent wiping while typing
+        // Update branch filter
+        if (fSelect.children.length - 1 !== filiais.length) {
+            fSelect.innerHTML = '<option value="">Todas Unidades</option>' + filiais.map(f => `<option value="${f}" ${f === currentF ? 'selected' : ''}>${escapeHTML(f)}</option>`).join('');
+        }
+        // Update vendor filter
         if (vSelect.children.length - 1 !== vendedores.length) {
             vSelect.innerHTML = '<option value="">Todos Vendedores</option>' + vendedores.map(v => `<option value="${v}" ${v === currentV ? 'selected' : ''}>${escapeHTML(v)}</option>`).join('');
         }
@@ -746,27 +935,47 @@ class NfeReportGenerator extends HTMLElement {
         data.forEach(d => { daily[d.dataEmissao] = (daily[d.dataEmissao] || 0) + d.valorFaturado; });
         const dates = Object.keys(daily).sort();
         
-        const ctxLine = shadow.getElementById('line-chart').getContext('2d');
+        // Line Chart (Main)
+        const ctxLine = shadow.getElementById('mainChart').getContext('2d');
         if (this.lineChart) this.lineChart.destroy();
         this.lineChart = new Chart(ctxLine, {
             type: 'line',
             data: {
                 labels: dates.map(d => d.split('-').reverse().join('/')),
                 datasets: [{
-                    label: 'Faturamento',
+                    label: 'Faturamento Estratégico',
                     data: dates.map(d => daily[d]),
-                    borderColor: '#0d8377',
-                    backgroundColor: 'rgba(13, 131, 119, 0.1)',
-                    fill: true, tension: 0.4, borderWidth: 4
+                    borderColor: '#0d9488',
+                    backgroundColor: 'rgba(13, 148, 136, 0.1)',
+                    fill: true, tension: 0.4, borderWidth: 4,
+                    pointBackgroundColor: '#fff',
+                    pointBorderColor: '#0d9488',
+                    pointBorderWidth: 2,
+                    pointRadius: 4
                 }]
             },
-            options: { maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            options: { 
+                maintainAspectRatio: false, 
+                plugins: { 
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#0f172a',
+                        titleFont: { size: 14, weight: 'bold' },
+                        padding: 12,
+                        cornerRadius: 12
+                    }
+                },
+                scales: {
+                    y: { grid: { display: false }, ticks: { font: { weight: '600' } } },
+                    x: { grid: { display: false }, ticks: { font: { weight: '600' } } }
+                }
+            }
         });
 
-        // Pie
+        // Branch Chart (Donut)
         const branches = {};
         data.forEach(d => { branches[d.filial] = (branches[d.filial] || 0) + d.valorFaturado; });
-        const ctxPie = shadow.getElementById('pie-chart').getContext('2d');
+        const ctxPie = shadow.getElementById('branchChart').getContext('2d');
         if (this.pieChart) this.pieChart.destroy();
         this.pieChart = new Chart(ctxPie, {
             type: 'doughnut',
@@ -774,10 +983,42 @@ class NfeReportGenerator extends HTMLElement {
                 labels: Object.keys(branches),
                 datasets: [{
                     data: Object.values(branches),
-                    backgroundColor: ['#0d8377', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444']
+                    backgroundColor: ['#0d9488', '#0f172a', '#3b82f6', '#8b5cf6', '#f43f5e'],
+                    borderWidth: 0,
+                    hoverOffset: 20
                 }]
             },
-            options: { maintainAspectRatio: false, cutout: '70%' }
+            options: { 
+                maintainAspectRatio: false, 
+                cutout: '75%',
+                plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: { weight: '600' } } } }
+            }
+        });
+
+        // Geo Chart (State distribution)
+        const states = {};
+        data.forEach(d => { if(d.estado) states[d.estado] = (states[d.estado] || 0) + d.valorFaturado; });
+        const ctxGeo = shadow.getElementById('geoChart').getContext('2d');
+        if (this.geoChart) this.geoChart.destroy();
+        this.geoChart = new Chart(ctxGeo, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(states),
+                datasets: [{
+                    label: 'Vendas por Estado',
+                    data: Object.values(states),
+                    backgroundColor: '#1e293b',
+                    borderRadius: 12
+                }]
+            },
+            options: { 
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+                    x: { grid: { display: false } }
+                }
+            }
         });
     }
 
@@ -789,29 +1030,95 @@ class NfeReportGenerator extends HTMLElement {
             perf[v] += d.valorFaturado;
         });
         const sorted = Object.keys(perf).sort((a,b) => perf[b] - perf[a]);
-        this.shadowRoot.getElementById('ranking-list').innerHTML = sorted.map((v, i) => `
-            <div style="display:flex; justify-content:space-between; padding: 1.2rem 0; border-bottom:1px solid #f1f5f9;">
-                <span>${i+1}. <strong>${escapeHTML(v)}</strong></span>
-                <span style="font-weight:800; color:#0d8377;">${this.formatCurrency(perf[v])}</span>
+        this.shadowRoot.getElementById('ranking-container').innerHTML = sorted.map((v, i) => `
+            <div style="display:flex; justify-content:space-between; align-items: center; padding: 1.5rem 0; border-bottom:1px solid #f1f5f9;">
+                <div style="display:flex; align-items:center; gap: 15px;">
+                    <div style="width: 32px; height: 32px; background: ${i === 0 ? '#0d9488' : '#f1f5f9'}; color: ${i === 0 ? 'white' : '#64748b'}; border-radius: 10px; display: grid; place-items: center; font-weight: 800; font-size: 0.8rem;">
+                        ${i+1}
+                    </div>
+                    <strong>${escapeHTML(v)}</strong>
+                </div>
+                <span style="font-weight:900; color:#0f172a; font-family: 'Outfit', sans-serif;">${this.formatCurrency(perf[v])}</span>
             </div>
         `).join('');
     }
 
     renderTable(data = this.reportData) {
         const container = this.shadowRoot.getElementById('table-container');
-        let html = '<table><thead><tr><th>Nota</th><th>Data</th><th>Cliente</th><th>Filial</th><th>Vendedor</th><th style="text-align:right;">Valor</th></tr></thead><tbody>';
-        data.sort((a,b) => b.dataEmissao.localeCompare(a.dataEmissao)).forEach(d => {
-            html += `<tr style="${d.isCanceled ? 'opacity:0.5; text-decoration:line-through; color:red;' : ''}">
-                <td><strong>#${escapeHTML(d.numeroNota)}</strong></td>
-                <td>${d.dataEmissao.split('-').reverse().join('/')}</td>
-                <td>${escapeHTML(d.cliente)}</td>
-                <td>${escapeHTML(d.filial)}</td>
-                <td>${escapeHTML(d.vendedor)}</td>
-                <td style="text-align:right; font-weight:800;">${this.formatCurrency(d.valorFaturado)}</td>
-            </tr>`;
+        let html = `
+            <table style="width:100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="text-align: left; background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                        <th style="padding: 1rem;">Nota</th>
+                        <th style="padding: 1rem;">Data</th>
+                        <th style="padding: 1rem;">Cliente</th>
+                        <th style="padding: 1rem;">Vendedor (Editável)</th>
+                        <th style="padding: 1rem;">Natureza</th>
+                    <th style="padding: 1rem;">Pagamento</th>
+                        <th style="padding: 1rem; text-align:right;">Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        data.sort((a,b) => b.dataEmissao.localeCompare(a.dataEmissao)).forEach((d, idx) => {
+            html += `
+                <tr style="border-bottom: 1px solid #f1f5f9; ${d.isCanceled ? 'opacity:0.5; color:red; text-decoration:line-through;' : ''}">
+                    <td style="padding: 1rem;"><strong>#${escapeHTML(d.numeroNota)}</strong></td>
+                    <td style="padding: 1rem;">${d.dataEmissao.split('-').reverse().join('/')}</td>
+                    <td style="padding: 1rem;">
+                        <div style="font-weight:700;">${escapeHTML(d.cliente)}</div>
+                        <div style="font-size:0.7rem; opacity:0.6;">${escapeHTML(d.filial)}</div>
+                    </td>
+                    <td style="padding: 1rem;">
+                        <input type="text" 
+                               class="edit-vendedor" 
+                               data-idx="${this.reportData.indexOf(d)}" 
+                               value="${escapeHTML(d.vendedor)}" 
+                               style="padding: 5px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-family: inherit; width: 100%;">
+                    </td>
+                    <td style="padding: 1rem;">
+                        <span style="font-size: 0.7rem; background: #fff7ed; color: #9a3412; padding: 4px 8px; border-radius: 6px; font-weight: 800; border: 1px solid #ffedd5;">
+                            ${escapeHTML(d.naturezaOperacao)}
+                        </span>
+                    </td>
+                    <td style="padding: 1rem;">
+                        <div style="display:flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                            <span style="font-size: 0.75rem; background: #eff6ff; color: #1e40af; padding: 4px 8px; border-radius: 6px; font-weight: 800; border: 1px solid #dbeafe;">
+                                ${escapeHTML(d.formaPagamento)}
+                            </span>
+                            <span style="font-size: 0.7rem; color: #64748b; font-weight: 700; margin-left: 4px;">
+                                ${d.parcelas} Parcelas
+                            </span>
+                        </div>
+                    </td>
+                    <td style="padding: 1rem; text-align:right; font-weight:800; font-size: 1.1rem; color: #0d8377;">
+                        ${this.formatCurrency(d.valorFaturado)}
+                    </td>
+                </tr>`;
         });
+        
         html += '</tbody></table>';
         container.innerHTML = html;
+
+        // BIND EDIT EVENTS
+        container.querySelectorAll('.edit-vendedor').forEach(input => {
+            input.addEventListener('change', async (e) => {
+                const idx = e.target.getAttribute('data-idx');
+                const newVal = e.target.value;
+                this.reportData[idx].vendedor = newVal;
+                
+                this.showToast('Atualizando vendedor...', 'info');
+                try {
+                    await DatabaseService.syncToSupabase([this.reportData[idx]]);
+                    this.showToast('Vendedor atualizado com sucesso!', 'success');
+                    // Backup local
+                    localStorage.setItem('mci_last_data', JSON.stringify(this.reportData));
+                } catch (err) {
+                    this.showToast('Erro ao sincronizar alteração.', 'error');
+                }
+            });
+        });
     }
 
     async syncCloud() {
