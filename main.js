@@ -82,18 +82,21 @@ class NfeParserService {
                     
                     const naturezaOperacaoRaw = getValue(ide, 'natOp') || 'N/A';
                     const natOpUpper = (getValue(ide, 'natOp') || 'N/A').toUpperCase();
+                    const isExit = getValue(ide, 'tpNF') === '1';
                     let natureType = 'OUTROS';
 
                     if (natOpUpper.includes('VENDA') || natOpUpper.includes('LOCA') || natOpUpper.includes('PREST')) {
                         natureType = (natOpUpper.includes('LOCA') || natOpUpper.includes('ALUG')) ? 'LOCAÇÃO' : 'VENDA';
+                    }
+
+                    if (natOpUpper.includes('RETORNO')) {
+                        natureType = 'RETORNO';
                     } else if (natOpUpper.includes('TRANSF') || natOpUpper.includes('REMESSA P/ FILIAL')) {
                         natureType = 'TRANSFERÊNCIA';
                     } else if (natOpUpper.includes('AMOSTRA') || natOpUpper.includes('BRINDE') || natOpUpper.includes('BONIF')) {
                         natureType = 'AMOSTRA/BRINDE';
                     } else if (natOpUpper.includes('DEVOLU')) {
                         natureType = 'DEVOLUÇÃO';
-                    } else if (natOpUpper.includes('RETORNO')) {
-                        natureType = 'RETORNO';
                     }
 
                     const cnpjEmit = getValue(emit, 'CNPJ');
@@ -109,9 +112,11 @@ class NfeParserService {
                         numeroNota: getValue(ide, 'nNF') || 'N/A',
                         naturezaOperacao: natureType,
                         naturezaOriginal: natOpUpper,
-                        isRevenue: (natureType === 'VENDA' || natureType === 'LOCAÇÃO'),
+                        isRevenue: isExit && (natureType === 'VENDA' || natureType === 'LOCAÇÃO'),
                         isDemo: natureType === 'AMOSTRA/BRINDE',
                         isDevolucao: natureType === 'DEVOLUÇÃO',
+                        isRetorno: natureType === 'RETORNO',
+                        isExit: isExit,
                         isTransfer: natureType === 'TRANSFERÊNCIA',
                         cliente: (() => {
                             const cnpjDest = getValue(dest, 'CNPJ');
@@ -1388,9 +1393,16 @@ class NfeReportGenerator extends HTMLElement {
                         </select>
                     </td>
                     <td style="padding: 1rem;">
-                        <span style="font-size: 0.7rem; background: #fff7ed; color: #9a3412; padding: 4px 8px; border-radius: 6px; font-weight: 800; border: 1px solid #ffedd5;">
-                            ${escapeHTML(d.naturezaOperacao)}
-                        </span>
+                        <div style="display:flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                            <span style="font-size: 0.7rem; background: #fff7ed; color: #9a3412; padding: 4px 8px; border-radius: 6px; font-weight: 800; border: 1px solid #ffedd5;">
+                                ${escapeHTML(d.naturezaOperacao)}
+                            </span>
+                            ${!d.isExit ? `
+                                <span style="font-size: 0.6rem; background: #f1f5f9; color: #475569; padding: 2px 6px; border-radius: 4px; font-weight: 900; text-transform: uppercase;">
+                                    📥 Entrada (Sem Receita)
+                                </span>
+                            ` : ''}
+                        </div>
                     </td>
                     <td style="padding: 1rem;">
                         <div style="display:flex; flex-direction: column; gap: 4px; align-items: flex-start;">
