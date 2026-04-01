@@ -1241,11 +1241,23 @@ class NfeReportGenerator extends HTMLElement {
                         <div style="font-size:0.7rem; opacity:0.6;">${escapeHTML(d.filial)}</div>
                     </td>
                     <td style="padding: 1rem;">
-                        <input type="text" 
-                               class="edit-vendedor" 
-                               data-idx="${this.reportData.indexOf(d)}" 
-                               value="${escapeHTML(d.vendedor)}" 
-                               style="padding: 5px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-family: inherit; width: 100%;">
+                        <select class="edit-vendedor" 
+                                data-idx="${this.reportData.indexOf(d)}" 
+                                style="padding: 5px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-family: inherit; width: 100%; cursor: pointer;">
+                            <option value="N/A" ${!d.vendedor || d.vendedor === 'N/A' || d.vendedor.includes('XML') ? 'selected' : ''}>-- Atribuir Vendedor --</option>
+                            <option value="FELIPE" ${d.vendedor === 'FELIPE' ? 'selected' : ''}>FELIPE</option>
+                            <option value="PAULO" ${d.vendedor === 'PAULO' ? 'selected' : ''}>PAULO</option>
+                            <option value="JOHN" ${d.vendedor === 'JOHN' ? 'selected' : ''}>JOHN</option>
+                            <option value="SARAH" ${d.vendedor === 'SARAH' ? 'selected' : ''}>SARAH</option>
+                            <option value="MATHEUS" ${d.vendedor === 'MATHEUS' ? 'selected' : ''}>MATHEUS</option>
+                            <option value="JOAO SOUSA" ${d.vendedor === 'JOAO SOUSA' ? 'selected' : ''}>JOÃO SOUSA</option>
+                            <option value="JOAO GOMES" ${d.vendedor === 'JOAO GOMES' ? 'selected' : ''}>JOÃO GOMES</option>
+                            <option value="WENDEL" ${d.vendedor === 'WENDEL' ? 'selected' : ''}>WENDEL</option>
+                            <option value="VINICIUS" ${d.vendedor === 'VINICIUS' ? 'selected' : ''}>VINICIUS</option>
+                            <option value="ISAAC" ${d.vendedor === 'ISAAC' ? 'selected' : ''}>ISAAC</option>
+                            <option value="BIANCA" ${d.vendedor === 'BIANCA' ? 'selected' : ''}>BIANCA</option>
+                            <option value="JONATHAN" ${d.vendedor === 'JONATHAN' ? 'selected' : ''}>JONATHAN</option>
+                        </select>
                     </td>
                     <td style="padding: 1rem;">
                         <span style="font-size: 0.7rem; background: #fff7ed; color: #9a3412; padding: 4px 8px; border-radius: 6px; font-weight: 800; border: 1px solid #ffedd5;">
