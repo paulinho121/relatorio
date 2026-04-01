@@ -1219,8 +1219,8 @@ class NfeReportGenerator extends HTMLElement {
             <table style="width:100%; border-collapse: collapse;">
                 <thead>
                     <tr style="text-align: left; background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
-                        <th style="padding: 1rem;">Nota</th>
-                        <th style="padding: 1rem;">Data</th>
+                        <th style="padding: 1rem; width: 100px;">Nota</th>
+                        <th style="padding: 1rem; width: 110px;">Data</th>
                         <th style="padding: 1rem;">Cliente</th>
                         <th style="padding: 1rem;">Vendedor (Editável)</th>
                         <th style="padding: 1rem;">Natureza</th>
@@ -1234,8 +1234,8 @@ class NfeReportGenerator extends HTMLElement {
         data.sort((a,b) => b.dataEmissao.localeCompare(a.dataEmissao)).forEach((d, idx) => {
             html += `
                 <tr style="border-bottom: 1px solid #f1f5f9; ${d.isCanceled ? 'opacity:0.5; color:red; text-decoration:line-through;' : ''}">
-                    <td style="padding: 1rem;"><strong>#${escapeHTML(d.numeroNota)}</strong></td>
-                    <td style="padding: 1rem;">${d.dataEmissao.split('-').reverse().join('/')}</td>
+                    <td style="padding: 1rem; width: 100px;"><strong>#${escapeHTML(d.numeroNota)}</strong></td>
+                    <td style="padding: 1rem; width: 110px;">${d.dataEmissao.split('-').reverse().join('/')}</td>
                     <td style="padding: 1rem;">
                         <div style="font-weight:700;">${escapeHTML(d.cliente)}</div>
                         <div style="font-size:0.7rem; opacity:0.6;">${escapeHTML(d.filial)}</div>
