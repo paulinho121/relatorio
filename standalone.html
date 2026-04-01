@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCI BI - Gerador de Relatório de NFe (Versão Standalone)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #f6f8f9 0%, #e5ebed 100%);
+            margin: 0;
+            padding: 2rem;
+            font-family: 'Poppins', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+
+        nfe-report-generator {
+            width: 100%;
+            max-width: 1400px;
+            transition: all 0.3s ease;
+        }
+
+        /* Beautiful Animated Background Texture */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4" viewBox="0 0 4 4"><path fill="%23199B8E" fill-opacity="0.04" d="M1 3h1v1H1V3zm2-2h1v1H3V1z"></path></svg>');
+            z-index: -1;
+            pointer-events: none;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <nfe-report-generator></nfe-report-generator>
+    
+    <script>
+        // CONTEÚDO DO main.js INTEGRADO PARA FUNCIONAR SEM SERVIDOR
+        // --- SUPABASE CONFIG ---
+        const SUPABASE_URL = "https://sjimfrvggujbarxedplu.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaW1mcnZnZ3VqYmFyeGVkcGx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwNjQxMDcsImV4cCI6MjA4ODY0MDEwN30.xL39Ku8lZuTsvxsUhyBj_iEV721ASMG2gVjUxyG1H3E";
+        const supabaseClient = (window.supabase) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+        // --- UTILS & SERVICES ---
+        const escapeHTML = (str) => {
+            if (str == null) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        class NfeParserService {
+            static async parseFiles(files) {
+                const promises = Array.from(files).map(file => this.parseSingleFile(file));
+                return Promise.all(promises);
+            }
+
+            static parseSingleFile(file) {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const xmlString = e.target.result;
+                            const parser = new DOMParser();
+                            const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+
+                            if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
+                                throw new Error('Arquivo XML inválido ou corrompido.');
+                            }
+                            
+                            const procEventoNFe = xmlDoc.getElementsByTagName('procEventoNFe')[0];
+                            if (procEventoNFe) {
+                                const descEvento = procEventoNFe.getElementsByTagName('descEvento')[0]?.textContent;
+                                if (descEvento === 'Cancelamento') {
+                                    const chNFe = procEventoNFe.getElementsByTagName('chNFe')[0]?.textContent;
+                                    if (chNFe) {
+                                        return resolve({ isCanceledEvent: true, numeroNota: chNFe.substring(25, 34), fileName: file.name });
+                                    }
+                                    return resolve({ isCanceledEvent: true, error: 'Chave não encontrada', fileName: file.name });
+                                }
+                            }
+
+                            const nfeNode = xmlDoc.getElementsByTagName('nfeProc')[0] || xmlDoc.getElementsByTagName('NFe')[0];
+                            if (!nfeNode) throw new Error('Estrutura XML de NFe não reconhecida.');
+
+                            const infNFe = nfeNode.getElementsByTagName('infNFe')[0];
+                            if (!infNFe) throw new Error('Estrutura XML incompleta (infNFe).');
+                            
+                            const protNFe = nfeNode.getElementsByTagName('protNFe')[0];
+                            const isCanceled = protNFe?.getElementsByTagName('xMotivo')[0]?.textContent?.toLowerCase().includes('cancelamento');
+
+                            const getValue = (context, tag) => context?.getElementsByTagName(tag)[0]?.textContent;
+
+                            const ide = infNFe.getElementsByTagName('ide')[0];
+                            const emit = infNFe.getElementsByTagName('emit')[0];
+                            const dest = infNFe.getElementsByTagName('dest')[0];
+                            const total = infNFe.getElementsByTagName('total')[0];
+                            const ICMSTot = total?.getElementsByTagName('ICMSTot')[0];
+                            const transp = infNFe.getElementsByTagName('transp')[0];
+
+                            const freteValor = parseFloat(getValue(ICMSTot, 'vFrete') || 0);
+                            const modFrete = getValue(transp, 'modFrete');
+                            
+                            const naturezaOperacaoRaw = getValue(ide, 'natOp') || 'N/A';
+                            const natOpUpper = naturezaOperacaoRaw.toUpperCase();
+                            
+                            resolve({
+                                filial: getValue(emit, 'xNome') || 'N/A',
+                                filialUF: getValue(emit.getElementsByTagName('enderEmit')[0], 'UF') || 'N/A',
+                                numeroNota: getValue(ide, 'nNF') || 'N/A',
+                                naturezaOperacao: naturezaOperacaoRaw,
+                                isRevenue: (natOpUpper.includes('VENDA') || natOpUpper.includes('LOCA')) && !natOpUpper.includes('DEVOLU') && !natOpUpper.includes('RETORNO'),
+                                isDemo: natOpUpper.includes('DEMONS'),
+                                isDevolucao: natOpUpper.includes('DEVOLU'),
+                                isRetorno: natOpUpper.includes('RETORNO'),
+                                cliente: getValue(dest, 'xNome') || 'N/A',
+                                cidade: getValue(dest.getElementsByTagName('enderDest')[0], 'xMun') || 'N/A',
+                                estado: getValue(dest.getElementsByTagName('enderDest')[0], 'UF') || 'N/A',
+                                contribuinte: { '1': 'Sim', '2': 'Isento', '9': 'Não' }[getValue(dest, 'indIEDest')] || 'N/I',
+                                frete: freteValor > 0 ? `Sim (R$ ${freteValor.toFixed(2)})` : ({ '0': 'Emitente', '1': 'Destinatário', '9': 'Não' })[modFrete] || 'N/I',
+                                valorFrete: freteValor,
+                                valorFaturado: parseFloat(getValue(ICMSTot, 'vNF') || 0) + parseFloat(getValue(ICMSTot, 'vFCPUFDest') || 0),
+                                dataEmissao: getValue(ide, 'dhEmi')?.substring(0, 10) || new Date().toISOString().substring(0, 10),
+                                vendedor: 'NFe (XML)',
+                                formaPagamento: ({ '01': 'Dinheiro', '02': 'Cheque', '03': 'Cartão Crédito', '04': 'Cartão Débito', '15': 'Boleto', '90': 'Sem Pagto', '99': 'Outros' })[infNFe.getElementsByTagName('tPag')[0]?.textContent] || 'Outros',
+                                parcelas: infNFe.getElementsByTagName('dup').length || 1,
+                                isCanceled: !!isCanceled,
+                                fileName: file.name
+                            });
+
+                        } catch (error) {
+                            resolve({ error: error.message, fileName: file.name });
+                        }
+                    };
+                    reader.onerror = () => {
+                        resolve({ error: 'Erro fatal de leitura do arquivo no navegador.', fileName: file.name });
+                    };
+                    reader.readAsText(file, 'UTF-8');
+                });
+            }
+
+            static parseJsonFile(file) {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            const normalized = Array.isArray(data) ? data : [data];
+                            const results = normalized.map(item => ({
+                                filial: item.filial || 'MCI IMPORT',
+                                filialUF: item.estado || 'N/A',
+                                numeroNota: item.número_da_nf || item.numeroNota || 'N/A',
+                                naturezaOperacao: item.tipo_operação || 'Importado via JSON',
+                                isRevenue: (item.tipo_operação === 'SAIDA' || item.isRevenue === true),
+                                isCanceled: !!item.isCanceled,
+                                isDemo: !!item.isDemo,
+                                isDevolucao: !!item.isDevolucao,
+                                isRetorno: !!item.isRetorno,
+                                cliente: item.cliente || 'N/A',
+                                cidade: item.cidade || '',
+                                estado: item.estado || '',
+                                contribuinte: item.contribuinte || 'Sim',
+                                frete: item.frete || 'Não',
+                                valorFrete: parseFloat(item.valorFrete || 0),
+                                difal: parseFloat(item.difal || 0),
+                                valorFaturado: parseFloat(item.valor || item.valorFaturado || 0),
+                                dataEmissao: item.data_emissão || item.dataEmissao || new Date().toISOString().substring(0, 10),
+                                vendedor: item.vendedor || 'Não Informado',
+                                formaPagamento: item.forma_de_pagamento || 'Boleto',
+                                parcelas: parseInt(item.numero_de_boletos || 1),
+                                fileName: file.name
+                            }));
+                            resolve(results);
+                        } catch (err) {
+                            resolve([{ error: 'Erro ao processar JSON: ' + err.message, fileName: file.name }]);
+                        }
+                    };
+                    reader.readAsText(file);
+                });
+            }
+        }
+
+        class DatabaseService {
+            static async syncToSupabase(data) {
+                if (!supabaseClient) throw new Error('Supabase Client não inicializado.');
+                const validData = data.filter(d => !d.error && !d.isCanceledEvent);
+                const vendederesNomes = [...new Set(validData.map(d => d.vendedor))];
+                const { data: vDB } = await supabaseClient.from('vendedores').upsert(
+                    vendederesNomes.map(nome => ({ nome })), { onConflict: 'nome' }
+                ).select();
+                const filiaisData = [...new Map(validData.map(item => [item.filial, { nome: item.filial, uf: item.filialUF }])).values()];
+                const { data: fDB } = await supabaseClient.from('filiais').upsert(
+                    filiaisData, { onConflict: 'nome' }
+                ).select();
+                const sellerMap = Object.fromEntries(vDB.map(v => [v.nome, v.id]));
+                const branchMap = Object.fromEntries(fDB.map(f => [f.nome, f.id]));
+                const faturamentoPayload = validData.map(d => ({
+                    numero_nota: d.numeroNota,
+                    vendedor_id: sellerMap[d.vendedor],
+                    filial_id: branchMap[d.filial],
+                    natureza_operacao: d.naturezaOperacao,
+                    cliente: d.cliente,
+                    cidade: d.cidade,
+                    estado: d.estado,
+                    valor_liquido: d.valorFaturado,
+                    valor_frete: d.valorFrete,
+                    forma_pagamento: d.formaPagamento,
+                    parcelas: d.parcelas,
+                    data_emissao: d.dataEmissao,
+                    is_revenue: d.isRevenue,
+                    status: d.isCanceled ? 'Cancelada' : (d.isRevenue ? 'Faturada' : (d.isDemo ? 'Demonstração' : (d.isRetorno ? 'Retorno' : 'Outros')))
+                }));
+                const { error } = await supabaseClient.from('faturamento').upsert(faturamentoPayload, { onConflict: 'numero_nota' });
+                if (error) throw error;
+                return true;
+            }
+
+            static async fetchAllHistory() {
+                if (!supabaseClient) return [];
+                const { data, error } = await supabaseClient.from('faturamento').select(`*, vendedores (nome), filiais (nome, uf)`).order('data_emissao', { ascending: false });
+                if (error) throw error;
+                return data.map(d => ({
+                    filial: d.filiais.nome, filialUF: d.filiais.uf, numeroNota: d.numero_nota,
+                    naturezaOperacao: d.natureza_operacao, isRevenue: d.is_revenue,
+                    isDemo: d.status === 'Demonstração', isDevolucao: d.status === 'Estorno',
+                    isRetorno: d.status === 'Retorno', isCanceled: d.status === 'Cancelada',
+                    cliente: d.cliente, cidade: d.cidade, estado: d.estado,
+                    vendedor: d.vendedores?.nome || 'N/A', formaPagamento: d.forma_pagamento,
+                    parcelas: d.parcelas, valorFaturado: d.valor_liquido, valorFrete: d.valor_frete,
+                    dataEmissao: d.data_emissao
+                }));
+            }
+        }
+
+        class NfeReportGenerator extends HTMLElement {
+            constructor() {
+                super();
+                this.attachShadow({ mode: 'open' });
+                this.shadowRoot.innerHTML = `
+                    <style>
+                        :host { display: block; font-family: 'Poppins', sans-serif; color: #2c3e50; }
+                        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.05); }
+                        .app-header { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 2rem; margin-bottom: 2rem; }
+                        .header-info h1 { margin: 0; font-size: 1.6rem; color: #0d8377; }
+                        .container { padding: 2rem; }
+                        .file-drop-area { padding: 3rem; border: 2px dashed #ccc; border-radius: 12px; text-align: center; cursor: pointer; transition: 0.3s; }
+                        .file-drop-area:hover { background: #f0fdfb; border-color: #199B8E; }
+                        #file-input-label { padding: 12px 24px; background: #199B8E; color: white; border-radius: 50px; cursor: pointer; font-weight: 600; display: inline-block; margin-top: 1rem; }
+                        #xml-files { display: none; }
+                        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 2rem; }
+                        .kpi-card { background: white; padding: 1.5rem; border-radius: 12px; border-left: 5px solid #199B8E; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
+                        .kpi-card h4 { margin: 0; font-size: 0.8rem; color: #7f8c8d; text-transform: uppercase; }
+                        .kpi-card .value { font-size: 1.8rem; font-weight: 700; margin: 0.5rem 0; }
+                        .tabs-container { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #eee; }
+                        .tab-btn { padding: 10px 20px; border: none; background: none; cursor: pointer; font-weight: 600; color: #7f8c8d; }
+                        .tab-btn.active { color: #199B8E; border-bottom: 3px solid #199B8E; }
+                        .tab-content { display: none; }
+                        .tab-content.active { display: block; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+                        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
+                        th { background: #f8f9fa; font-size: 0.8rem; color: #7f8c8d; }
+                        .summary { margin-top: 2rem; padding: 2rem; background: #199B8E; color: white; border-radius: 16px; }
+                        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: white; margin-right: 5px; }
+                        #print-button { background: #34495e; }
+                        #export-button { background: #2ecc71; }
+                        #delete-button { background: #e74c3c; }
+                    </style>
+                    <header class="app-header glass-panel">
+                        <div class="header-info">
+                            <h1>MCI Business Intelligence</h1>
+                            <p id="report-date"></p>
+                        </div>
+                    </header>
+                    <div class="container glass-panel">
+                        <div class="file-drop-area" id="file-drop-area">
+                            <p>Arraste arquivos <strong>XML</strong> ou <strong>JSON</strong> aqui</p>
+                            <label for="xml-files" id="file-input-label">Selecionar Arquivos</label>
+                            <input type="file" id="xml-files" accept=".xml,.json" multiple>
+                        </div>
+                        <div class="tabs-container" style="margin-top:2rem;">
+                            <button class="tab-btn active" data-tab="tab-dashboard">Dashboard</button>
+                            <button class="tab-btn" data-tab="tab-daily">Relatório Detalhado</button>
+                        </div>
+                        <div id="tab-dashboard" class="tab-content active">
+                            <div class="dashboard-grid" id="kpi-container">
+                                <div class="kpi-card"><h4>Faturado</h4><div class="value" id="kpi-faturado">R$ 0,00</div></div>
+                                <div class="kpi-card"><h4>Ritmo</h4><div class="value" id="kpi-percentage">0%</div></div>
+                            </div>
+                            <div style="height:300px; margin-top:2rem;"><canvas id="line-chart"></canvas></div>
+                        </div>
+                        <div id="tab-daily" class="tab-content">
+                            <div style="margin-bottom:1rem;">
+                                <button class="btn" id="print-button">Imprimir</button>
+                                <button class="btn" id="export-button">Excel</button>
+                                <button class="btn" id="delete-button">Excluir</button>
+                            </div>
+                            <div id="report-container"></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            connectedCallback() {
+                const shadow = this.shadowRoot;
+                this.reportData = [];
+                const fileInput = shadow.getElementById('xml-files');
+                const fileDropArea = shadow.getElementById('file-drop-area');
+                
+                shadow.getElementById('report-date').textContent = new Date().toLocaleDateString('pt-BR');
+
+                const handleFiles = async (files) => {
+                    if (files.length === 0) return;
+                    await this.processFiles(files);
+                };
+
+                fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+                fileDropArea.addEventListener('click', () => fileInput.click());
+                
+                shadow.querySelectorAll('.tab-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        shadow.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                        shadow.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                        btn.classList.add('active');
+                        shadow.getElementById(btn.dataset.tab).classList.add('active');
+                        if (btn.dataset.tab === 'tab-dashboard') this.updateCharts();
+                    });
+                });
+
+                shadow.getElementById('print-button').addEventListener('click', () => window.print());
+                shadow.getElementById('export-button').addEventListener('click', () => this.exportCsv());
+            }
+
+            async processFiles(files) {
+                const results = await NfeParserService.parseFiles(files);
+                this.reportData = results;
+                this.renderReport();
+                this.updateCharts();
+            }
+
+            renderReport() {
+                const container = this.shadowRoot.getElementById('report-container');
+                let html = '<table><thead><tr><th>Nota</th><th>Cliente</th><th>Valor</th></tr></thead><tbody>';
+                let total = 0;
+                this.reportData.forEach(item => {
+                    if (item.error) return;
+                    total += item.valorFaturado || 0;
+                    html += `<tr><td>${item.numeroNota}</td><td>${item.cliente}</td><td>R$ ${item.valorFaturado?.toFixed(2)}</td></tr>`;
+                });
+                html += '</tbody></table>';
+                container.innerHTML = html;
+                this.shadowRoot.getElementById('kpi-faturado').textContent = `R$ ${total.toFixed(2)}`;
+            }
+
+            updateCharts() {
+                const el = this.shadowRoot.getElementById('line-chart');
+                if (!el || this.reportData.length === 0) return;
+                const ctx = el.getContext('2d');
+                if (this.chart) this.chart.destroy();
+                this.chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: this.reportData.map(d => d.numeroNota),
+                        datasets: [{ label: 'Valor', data: this.reportData.map(d => d.valorFaturado), borderColor: '#199B8E', tension: 0.4 }]
+                    },
+                    options: { maintainAspectRatio: false }
+                });
+            }
+
+            exportCsv() {
+                const csv = this.reportData.map(d => `${d.numeroNota};${d.cliente};${d.valorFaturado}`).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'relatorio.csv';
+                a.click();
+            }
+        }
+        customElements.define('nfe-report-generator', NfeReportGenerator);
+    </script>
+</body>
+</html>

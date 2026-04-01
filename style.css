@@ -1,0 +1,27 @@
+body {
+    background: #f1f5f9;
+    margin: 0;
+    padding: 0;
+    font-family: 'Poppins', sans-serif;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+nfe-report-generator {
+    width: 100%;
+    max-width: 1400px;
+    transition: all 0.3s ease;
+}
+
+/* Beautiful Animated Background Texture */
+body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4" viewBox="0 0 4 4"><path fill="%23199B8E" fill-opacity="0.04" d="M1 3h1v1H1V3zm2-2h1v1H3V1z"></path></svg>');
+    z-index: -1;
+    pointer-events: none;
+}
