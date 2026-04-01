@@ -416,7 +416,9 @@ class NfeReportGenerator extends HTMLElement {
                 
                 .app-container {
                     display: grid;
+                    grid-template-areas: "sidebar content";
                     grid-template-columns: 240px 1fr;
+                    grid-template-rows: 100vh;
                     height: 100vh;
                     background-color: var(--bg);
                     background-image: var(--noise);
@@ -426,10 +428,18 @@ class NfeReportGenerator extends HTMLElement {
                     position: relative;
                 }
 
+                aside { grid-area: sidebar; z-index: 200; transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+                main { grid-area: content; overflow-y: auto; padding: 2rem; position: relative; }
+
                 @media (max-width: 1024px) {
                     .app-container {
+                        grid-template-areas: "mobile-header" "content";
                         grid-template-columns: 1fr;
+                        grid-template-rows: auto 1fr;
                     }
+                    aside { grid-area: content; }
+                    main { grid-area: content; padding: 1rem; }
+                    .mobile-header { grid-area: mobile-header; display: flex; }
                 }
 
                 /* MOBILE HEADER */
@@ -444,9 +454,6 @@ class NfeReportGenerator extends HTMLElement {
                     top: 0;
                     z-index: 100;
                     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                }
-
-                @media (max-width: 1024px) {
                     .mobile-header { display: flex; }
                 }
 
