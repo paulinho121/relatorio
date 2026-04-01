@@ -1006,7 +1006,7 @@ class NfeReportGenerator extends HTMLElement {
         }
     }
 
-    updateUI() {
+    updateUI(isSoftUpdate = false) {
         const shadow = this.shadowRoot;
         const selMonth = shadow.getElementById('select-month').value;
         const selYear = shadow.getElementById('select-year').value;
@@ -1061,10 +1061,12 @@ class NfeReportGenerator extends HTMLElement {
             shadow.getElementById('kpi-forecast').textContent = this.formatCurrency(forecast);
         }
 
-        if (this.currentView === 'dashboard') {
-            this.renderCharts(billed);
-            this.renderRanking(billed);
-        } else if (this.currentView === 'reports') {
+        // SEMPRE ATUALIZA O SEGUNDO PLANO (Ranking e Charts)
+        this.renderCharts(billed);
+        this.renderRanking(billed);
+
+        // SÓ ATUALIZA A TABELA SE NÃO FOR SOFT-UPDATE
+        if (this.currentView === 'reports' && !isSoftUpdate) {
             this.renderTable(filteredData);
         }
     }
@@ -1296,6 +1298,9 @@ class NfeReportGenerator extends HTMLElement {
                     this.showToast('Vendedor atualizado com sucesso!', 'success');
                     // Backup local
                     localStorage.setItem('mci_last_data', JSON.stringify(this.reportData));
+                    
+                    // ATUALIZAÇÃO EM TEMPO REAL: Recalcula o ranking e KPIs sem dar "pulo" na tela
+                    this.updateUI(true);
                 } catch (err) {
                     this.showToast('Erro ao sincronizar alteração.', 'error');
                 }
