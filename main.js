@@ -158,27 +158,27 @@ class NfeParserService {
                     const fallbackDate = `${overrideYear}-${overrideMonth}-01`;
 
                     const results = normalized.map(item => ({
-                        filial: item.filial || 'MCI IMPORT',
-                        filialUF: item.estado || 'N/A',
-                        numeroNota: item.número_da_nf || item.numeroNota || 'JSON-' + Date.now() + Math.random(),
-                        naturezaOperacao: item.tipo_operação || 'Importado via JSON',
-                        isRevenue: (item.tipo_operação === 'SAIDA' || item.isRevenue === true),
+                        filial: item['Unnamed: 0'] || item.filial || 'MCI IMPORT',
+                        filialUF: item.ESTADO || item.estado || 'N/A',
+                        numeroNota: String(item['NÚMERO DA NF'] || item.número_da_nf || item.numeroNota || 'JSON-' + Date.now() + Math.random()),
+                        naturezaOperacao: item['TIPO OPERAÇÃO'] || item.tipo_operação || 'Importado via JSON',
+                        isRevenue: (item['TIPO OPERAÇÃO'] === 'SAIDA' || item.tipo_operação === 'SAIDA' || item.isRevenue === true),
                         isCanceled: !!item.isCanceled,
                         isDemo: !!item.isDemo,
                         isDevolucao: !!item.isDevolucao,
                         isRetorno: !!item.isRetorno,
-                        cliente: item.cliente || 'N/A',
+                        cliente: item.CLIENTE || item.cliente || 'N/A',
                         cidade: item.cidade || '',
-                        estado: item.estado || '',
+                        estado: item.ESTADO || item.estado || '',
                         contribuinte: item.contribuinte || 'Sim',
-                        frete: item.frete || 'Não',
-                        valorFrete: parseFloat(item.valorFrete || 0),
+                        frete: item.Frete || item.frete || 'Não',
+                        valorFrete: parseFloat(item.Frete || item.valorFrete || 0),
                         difal: parseFloat(item.difal || 0),
-                        valorFaturado: parseFloat(item.valor || item.valorFaturado || 0),
-                        dataEmissao: item.data_emissão || item.dataEmissao || fallbackDate,
-                        vendedor: item.vendedor || 'Padrão (JSON)',
-                        formaPagamento: item.forma_de_pagamento || 'Boleto',
-                        parcelas: parseInt(item.numero_de_boletos || 1),
+                        valorFaturado: parseFloat(item.VALOR || item.valor || item.valorFaturado || 0),
+                        dataEmissao: item['DATA EMISSÃO'] || item.data_emissão || item.dataEmissao || fallbackDate,
+                        vendedor: item.VENDEDOR || item.vendedor || 'Padrão (JSON)',
+                        formaPagamento: item.forma_de_pagamento || item['FORMA DE PAGAMENTO'] || 'Boleto',
+                        parcelas: parseInt(item.numero_de_boletos || item['NUMERO DE BOLETOS'] || 1),
                         fileName: file.name
                     }));
                     resolve(results);
@@ -189,6 +189,78 @@ class NfeParserService {
             reader.readAsText(file);
         });
     }
+
+    static parseTableText(text, overrideMonth, overrideYear) {
+        const lines = text.trim().split('\n');
+        if (lines.length === 0) return [];
+        
+        const fallbackDate = `${overrideYear}-${overrideMonth}-01`;
+        const results = [];
+
+        lines.forEach(line => {
+            // Split by tabs or multiple spaces (at least 2) to identify columns
+            const cells = line.split(/\t|\s{2,}/).map(c => c.trim()).filter(c => c !== '');
+            if (cells.length < 3) return; // Ignore noisy lines
+
+            // HEURISTIC DETECTION
+            let valor = 0, data = fallbackDate, estado = 'SP', nota = '', vendedor = 'Padrão', cliente = 'N/A', natureza = 'Venda';
+            
+            cells.forEach(cell => {
+                // Is it currency? (R$ 0,00)
+                if (cell.includes('R$') || (cell.includes(',') && cell.split(',')[1].length === 2 && !isNaN(parseFloat(cell.replace(/\./g, '').replace(',', '.'))))) {
+                    valor = parseFloat(cell.split('R$').pop().replace(/\./g, '').replace(',', '.').trim()) || 0;
+                }
+                // Is it a date? (DD/MM/YYYY)
+                else if (/^\d{2}\/\d{2}\/\d{4}$/.test(cell)) {
+                    const parts = cell.split('/');
+                    data = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                }
+                // Is it a short state code?
+                else if (/^[A-Z]{2}$/.test(cell) && ['SP','SC','CE','RJ','MG','PR','RS','EX','MT','DF','PA','PE','SE','AM','BA','RN','PB','PI'].includes(cell)) {
+                    estado = cell;
+                }
+                // Is it a note number? (Only digits, usually > 2 characters)
+                else if (/^\d+$/.test(cell) && cell.length >= 3) {
+                    nota = cell;
+                }
+                // Is it all caps? (Likely nature or vendor)
+                else if (cell === cell.toUpperCase() && cell.length > 3) {
+                    if (['SAIDA','LOCAÇÃO','ENTREGA','TRANSFERENCIA','SERVIÇO','DEMO','GARANTIA'].some(n => cell.includes(n))) {
+                        natureza = cell;
+                    } else {
+                        // Probably client or vendor, heuristic guess based on known vendors
+                        if (['WENDEL','FELIPE','SARAH','JOHN','MATHEUS','JONATHAN','JOAO','VINICIUS','ISAAC'].some(v => cell.includes(v))) {
+                            vendedor = cell;
+                        } else {
+                            cliente = cell;
+                        }
+                    }
+                }
+            });
+
+            if (valor > 0 || nota) {
+                results.push({
+                    filial: estado || 'MCI IMPORT',
+                    filialUF: estado || 'N/A',
+                    numeroNota: nota || 'PASTE-' + Date.now() + Math.random(),
+                    naturezaOperacao: natureza,
+                    isRevenue: ['SAIDA','LOCAÇÃO','SERVIÇO'].some(n => natureza.includes(n)),
+                    isCanceled: false,
+                    cliente: cliente,
+                    cidade: '', estado: estado,
+                    valorFrete: 0, difal: 0,
+                    valorFaturado: valor,
+                    dataEmissao: data,
+                    vendedor: vendedor,
+                    formaPagamento: 'Faturado',
+                    parcelas: 1
+                });
+            }
+        });
+
+        console.log(`🧠 Processador Heurístico: Identificou ${results.length} registros válidos.`);
+        return results;
+    }
 }
 
 class DatabaseService {
@@ -198,52 +270,73 @@ class DatabaseService {
         const validData = data.filter(d => !d.error && !d.isCanceledEvent);
         if (validData.length === 0) return true;
 
-        console.log(`📡 Sincronizando lote de ${validData.length} registros...`);
+        console.log(`📡 Iniciando sincronização de ${validData.length} registros...`);
 
-        // 1. SINCRONIZAÇÃO DE VENDEDORES (Idempotente)
-        const vendederesNomes = [...new Set(validData.map(d => d.vendedor))];
-        const vResult = await supabaseClient.from('vendedores').upsert(
-            vendederesNomes.map(nome => ({ nome })), 
-            { onConflict: 'nome' }
-        ).select('id, nome');
-        
-        if (vResult.error) throw new Error(`Erro Vendedores: ${vResult.error.message}`);
-        const sellerMap = Object.fromEntries(vResult.data.map(v => [v.nome, v.id]));
+        try {
+            // 1. VENDEDORES
+            const vendederesNomes = [...new Set(validData.map(d => d.vendedor))];
+            const { data: vData, error: vErr } = await supabaseClient.from('vendedores').upsert(
+                vendederesNomes.map(nome => ({ nome })), 
+                { onConflict: 'nome' }
+            ).select('id, nome');
+            
+            if (vErr) {
+                console.error('❌ Erro na tabela Vendedores:', vErr);
+                throw new Error(`Permissão Negada em Vendedores: ${vErr.message}`);
+            }
+            const sellerMap = Object.fromEntries(vData.map(v => [v.nome, v.id]));
 
-        // 2. SINCRONIZAÇÃO DE FILIAIS (Idempotente)
-        const filiaisData = [...new Map(validData.map(item => [item.filial, { nome: item.filial, uf: item.filialUF }])).values()];
-        const fResult = await supabaseClient.from('filiais').upsert(
-            filiaisData, 
-            { onConflict: 'nome' }
-        ).select('id, nome');
+            // 2. FILIAIS
+            const filiaisData = [...new Map(validData.map(item => [item.filial, { nome: item.filial, uf: item.filialUF }])).values()];
+            const { data: fData, error: fErr } = await supabaseClient.from('filiais').upsert(
+                filiaisData, 
+                { onConflict: 'nome' }
+            ).select('id, nome');
 
-        if (fResult.error) throw new Error(`Erro Filiais: ${fResult.error.message}`);
-        const branchMap = Object.fromEntries(fResult.data.map(f => [f.nome, f.id]));
+            if (fErr) {
+                console.error('❌ Erro na tabela Filiais:', fErr);
+                throw new Error(`Permissão Negada em Filiais: ${fErr.message}`);
+            }
+            const branchMap = Object.fromEntries(fData.map(f => [f.nome, f.id]));
 
-        // 3. SINCRONIZAÇÃO DE FATURAMENTO (Relacional)
-        const faturamentoPayload = validData.map(d => ({
-            numero_nota: d.numeroNota,
-            vendedor_id: sellerMap[d.vendedor],
-            filial_id: branchMap[d.filial],
-            natureza_operacao: d.naturezaOperacao,
-            cliente: d.cliente,
-            cidade: d.cidade,
-            estado: d.estado,
-            valor_liquido: d.valorFaturado,
-            valor_frete: d.valorFrete,
-            forma_pagamento: d.formaPagamento,
-            parcelas: d.parcelas,
-            data_emissao: d.dataEmissao,
-            is_revenue: d.isRevenue,
-            status: d.isCanceled ? 'Cancelada' : (d.isRevenue ? 'Faturada' : (d.isDemo ? 'Demonstração' : (d.isRetorno ? 'Retorno' : 'Outros')))
-        }));
+            // 3. FATURAMENTO (Deduplicar payload por numero_nota antes de enviar)
+            const uniquePayloadMap = new Map();
+            validData.forEach(d => {
+                uniquePayloadMap.set(d.numeroNota, {
+                    numero_nota: d.numeroNota,
+                    vendedor_id: sellerMap[d.vendedor],
+                    filial_id: branchMap[d.filial],
+                    natureza_operacao: d.naturezaOperacao,
+                    cliente: d.cliente,
+                    cidade: d.cidade,
+                    estado: d.estado,
+                    valor_liquido: d.valorFaturado,
+                    valor_frete: d.valorFrete,
+                    forma_pagamento: d.formaPagamento,
+                    parcelas: d.parcelas,
+                    data_emissao: d.dataEmissao,
+                    is_revenue: d.isRevenue,
+                    status: d.isCanceled ? 'Cancelada' : (d.isRevenue ? 'Faturada' : (d.isDemo ? 'Demonstração' : (d.isRetorno ? 'Retorno' : 'Outros')))
+                });
+            });
 
-        const { error: syncErr } = await supabaseClient
-            .from('faturamento')
-            .upsert(faturamentoPayload, { onConflict: 'numero_nota' });
+            const faturamentoPayload = Array.from(uniquePayloadMap.values());
 
-        if (syncErr) throw syncErr;
-        return true;
+            const { error: syncErr } = await supabaseClient
+                .from('faturamento')
+                .upsert(faturamentoPayload, { onConflict: 'numero_nota' });
+
+            if (syncErr) {
+                console.error('❌ Erro na tabela Faturamento:', syncErr);
+                throw new Error(`Erro ao salvar faturamento: ${syncErr.message}`);
+            }
+
+            console.log('✅ Sincronização concluída com sucesso!');
+            return true;
+        } catch (err) {
+            console.error('🚀 Falha Crítica de Sync:', err);
+            throw err;
+        }
     }
 
     static async fetchAllHistory() {
@@ -671,7 +764,13 @@ class NfeReportGenerator extends HTMLElement {
                                 <button class="btn btn-primary" id="select-btn">Explorar Arquivos</button>
                             </div>
                             
-                            <div style="margin-top: 2.5rem; display: flex; justify-content: center; gap: 20px;">
+                            <div style="margin-top: 2.5rem; display: flex; flex-direction: column; gap: 20px; align-items: center;">
+                                <div style="background: white; padding: 20px; border-radius: 20px; border: 1px solid #f1f5f9; width: 100%; max-width: 800px;">
+                                    <label style="font-size: 0.65rem; font-weight: 900; color: #94a3b8; display: block; margin-bottom: 10px;">COLAR DADOS DO EXCEL (TABELA)</label>
+                                    <textarea id="paste-area" style="width:100%; height: 120px; border: 1.5px solid #f1f5f9; border-radius: 12px; padding: 15px; font-family: monospace; font-size: 0.75rem;" placeholder="Copie as linhas do Excel e cole aqui..."></textarea>
+                                    <button class="btn btn-primary" id="process-paste-btn" style="width:100%; margin-top: 15px;">📥 Processar Texto Colado</button>
+                                </div>
+                                
                                 <div style="background: white; padding: 20px 35px; border-radius: 20px; border: 1px solid #f1f5f9; box-shadow: 0 10px 30px rgba(0,0,0,0.02);">
                                     <label style="font-size: 0.65rem; font-weight: 900; color: #94a3b8; display: block; margin-bottom: 10px;">ID DA UNIDADE DESTINO</label>
                                     <div style="display: flex; gap: 10px;">
@@ -795,6 +894,47 @@ class NfeReportGenerator extends HTMLElement {
             if (el) {
                 const event = el.tagName === 'INPUT' ? 'input' : 'change';
                 el.addEventListener(event, () => this.updateUI());
+            }
+        });
+
+        // PROCESS PASTE BUTTON
+        shadow.getElementById('process-paste-btn').addEventListener('click', async () => {
+            const area = shadow.getElementById('paste-area');
+            const text = area.value;
+            const month = shadow.getElementById('import-month').value;
+            const year = shadow.getElementById('import-year').value;
+            
+            if (!text.trim()) {
+                this.showToast('Cole os dados primeiro!', 'error');
+                return;
+            }
+
+            try {
+                this.showToast('Processando dados...', 'info');
+                const parsed = NfeParserService.parseTableText(text, month, year);
+                if (parsed.length === 0) throw new Error('Nenhum dado válido encontrado.');
+                
+                const existing = new Set(this.reportData.map(d => d.numeroNota));
+                const fresh = parsed.filter(p => !existing.has(p.numeroNota));
+                
+                if (fresh.length > 0) {
+                    this.reportData = [...this.reportData, ...fresh];
+                    localStorage.setItem('mci_last_data', JSON.stringify(this.reportData));
+                    this.updateUI();
+                    
+                    try {
+                        await DatabaseService.syncToSupabase(fresh);
+                        this.showToast(`${fresh.length} registros integrados!`, 'success');
+                    } catch (cloudErr) {
+                        this.showToast('Aviso: Salvo localmente, erro na nuvem.', 'info');
+                    }
+                    area.value = '';
+                } else {
+                    this.showToast('Registros já existem no sistema.', 'info');
+                }
+            } catch (err) {
+                console.error(err);
+                this.showToast('Erro ao processar: ' + err.message, 'error');
             }
         });
     }
