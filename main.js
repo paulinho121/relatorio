@@ -423,6 +423,42 @@ class NfeReportGenerator extends HTMLElement {
                     background-blend-mode: overlay;
                     font-family: 'Inter', sans-serif;
                     overflow: hidden;
+                    position: relative;
+                }
+
+                @media (max-width: 1024px) {
+                    .app-container {
+                        grid-template-columns: 1fr;
+                    }
+                }
+
+                /* MOBILE HEADER */
+                .mobile-header {
+                    display: none;
+                    background: #0f172a;
+                    color: white;
+                    padding: 1rem 1.5rem;
+                    align-items: center;
+                    justify-content: space-between;
+                    position: sticky;
+                    top: 0;
+                    z-index: 100;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                }
+
+                @media (max-width: 1024px) {
+                    .mobile-header { display: flex; }
+                }
+
+                .menu-toggle {
+                    background: transparent;
+                    border: none;
+                    color: white;
+                    font-size: 1.5rem;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
                 }
 
                 /* SIDEBAR LUXURY */
@@ -434,8 +470,35 @@ class NfeReportGenerator extends HTMLElement {
                     flex-direction: column;
                     gap: 1.5rem;
                     box-shadow: 15px 0 40px rgba(0,0,0,0.1);
-                    z-index: 50;
+                    z-index: 200;
                     position: relative;
+                    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+                }
+
+                @media (max-width: 1024px) {
+                    aside {
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 280px;
+                        height: 100vh;
+                        transform: translateX(-100%);
+                    }
+                    aside.open {
+                        transform: translateX(0);
+                    }
+                    .overlay {
+                        display: none;
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100vw;
+                        height: 100vh;
+                        background: rgba(0,0,0,0.5);
+                        backdrop-filter: blur(4px);
+                        z-index: 150;
+                    }
+                    .overlay.open { display: block; }
                 }
 
                 .brand-zone {
@@ -469,6 +532,7 @@ class NfeReportGenerator extends HTMLElement {
                     background: transparent;
                     width: 100%;
                     text-align: left;
+                    font-size: 0.9rem;
                 }
 
                 .nav-item:hover { background: rgba(255,255,255,0.05); color: white; transform: translateX(5px); }
@@ -492,15 +556,36 @@ class NfeReportGenerator extends HTMLElement {
                     background: radial-gradient(circle at top right, rgba(20, 184, 166, 0.03) 0%, transparent 40%);
                 }
 
+                @media (max-width: 640px) {
+                    main { padding: 1rem; }
+                }
+
                 .view { display: none; max-width: 1400px; margin: 0 auto; }
                 .view.active { display: block; animation: viewEnter 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
-                /* HIDE FILTERS ON CONFIG VIEW */
-                #view-config.active ~ .filter-wrapper,
-                main:has(#view-config.active) .global-filter-bar { display: none; }
-                
-                /* Alternative for older browsers or simple visibility control */
-                :host([active-view="config"]) .global-filter-bar { display: none; }
+                /* GLOBAL FILTER BAR RESPONSIVE */
+                .global-filter-bar {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                    gap: 12px;
+                    align-items: flex-end;
+                    padding: 1.2rem;
+                    margin-bottom: 2rem;
+                }
+
+                @media (max-width: 768px) {
+                    .global-filter-bar {
+                        grid-template-columns: 1fr 1fr;
+                    }
+                    .global-filter-bar > div:first-child { grid-column: span 2; }
+                }
+
+                @media (max-width: 480px) {
+                    .global-filter-bar {
+                        grid-template-columns: 1fr;
+                    }
+                    .global-filter-bar > div:first-child { grid-column: span 1; }
+                }
 
                 @keyframes viewEnter {
                     from { transform: translateY(40px); opacity: 0; filter: blur(10px); }
@@ -508,6 +593,11 @@ class NfeReportGenerator extends HTMLElement {
                 }
 
                 h1 { font-family: 'Outfit', sans-serif; font-size: 2.2rem; font-weight: 900; color: #0f172a; letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 0.5rem; }
+                header { margin-bottom: 2rem; }
+                .header-content { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; }
+                @media (max-width: 640px) {
+                    .header-content { flex-direction: column; align-items: flex-start; }
+                }
                 header p { color: #64748b; font-size: 1rem; font-weight: 500; }
 
                 /* GLASSMORPHIC CARDS */
@@ -594,7 +684,17 @@ class NfeReportGenerator extends HTMLElement {
             </style>
 
             <div class="app-container">
-                <aside>
+                <div class="overlay" id="sidebar-overlay"></div>
+                
+                <div class="mobile-header">
+                    <div style="display:flex; align-items:center; gap: 12px;">
+                        <div class="brand-logo" style="width:32px; height:32px; font-size:1rem; border-radius:8px;">M</div>
+                        <span style="font-family: 'Outfit', sans-serif; font-weight:900; font-size:1.1rem; letter-spacing:-0.5px;">MCI Intelligence</span>
+                    </div>
+                    <button class="menu-toggle" id="menu-toggle">☰</button>
+                </div>
+
+                <aside id="app-sidebar">
                     <div class="brand-zone">
                         <div class="brand-logo">M</div>
                         <div>
@@ -635,7 +735,7 @@ class NfeReportGenerator extends HTMLElement {
 
                 <main>
                     <header>
-                        <div style="display:flex; justify-content: space-between; align-items: flex-end; width: 100%;">
+                        <div class="header-content">
                             <div>
                                 <h1 id="welcome-title">Visão Estratégica</h1>
                                 <p id="dashboard-date"></p>
@@ -647,7 +747,7 @@ class NfeReportGenerator extends HTMLElement {
                     </header>
 
                     <!-- BARRA DE FILTROS ELITE (Global) -->
-                    <div class="glass-card global-filter-bar" id="global-filter-zone" style="display: grid; grid-template-columns: 2fr 1.2fr 1.2fr 1.2fr 1.2fr 1fr 1fr; gap: 12px; align-items: flex-end; padding: 1.2rem; margin-bottom: 2rem;">
+                    <div class="glass-card global-filter-bar" id="global-filter-zone">
                         <div>
                             <label style="font-size: 0.65rem; font-weight: 800; color: #64748b; margin-bottom: 6px; display: block; text-transform: uppercase;">Busca Rápida</label>
                             <input type="text" id="filter-search" placeholder="Cliente ou Nota..." style="width:100%;">
@@ -852,18 +952,36 @@ class NfeReportGenerator extends HTMLElement {
     }
 
     setupNavigation() {
-        const navs = this.shadowRoot.querySelectorAll('.nav-item');
-        const views = this.shadowRoot.querySelectorAll('.view');
+        const shadow = this.shadowRoot;
+        const navs = shadow.querySelectorAll('.nav-item');
+        const views = shadow.querySelectorAll('.view');
+        const sidebar = shadow.getElementById('app-sidebar');
+        const overlay = shadow.getElementById('sidebar-overlay');
+        const menuToggle = shadow.getElementById('menu-toggle');
+
+        const closeSidebar = () => {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('open');
+        };
+
+        const openSidebar = () => {
+            sidebar.classList.add('open');
+            overlay.classList.add('open');
+        };
+
+        if (menuToggle) menuToggle.addEventListener('click', openSidebar);
+        if (overlay) overlay.addEventListener('click', closeSidebar);
+
         navs.forEach(nav => {
             nav.addEventListener('click', () => {
                 const target = nav.dataset.view;
                 navs.forEach(n => n.classList.remove('active'));
                 views.forEach(v => v.classList.remove('active'));
                 nav.classList.add('active');
-                this.shadowRoot.getElementById(`view-${target}`).classList.add('active');
+                shadow.getElementById(`view-${target}`).classList.add('active');
                 this.currentView = target;
                 
-                const welcomeTitle = this.shadowRoot.getElementById('welcome-title');
+                const welcomeTitle = shadow.getElementById('welcome-title');
                 if (welcomeTitle) {
                     if (target === 'dashboard') welcomeTitle.textContent = 'Visão Estratégica';
                     else if (target === 'reports') welcomeTitle.textContent = 'Auditoria Fiscal';
@@ -871,11 +989,12 @@ class NfeReportGenerator extends HTMLElement {
                 }
 
                 // Update visibility of the global filter bar
-                const filterBar = this.shadowRoot.getElementById('global-filter-zone');
+                const filterBar = shadow.getElementById('global-filter-zone');
                 if (filterBar) {
                     filterBar.style.display = (target === 'config') ? 'none' : 'grid';
                 }
 
+                closeSidebar();
                 this.updateUI();
             });
         });

@@ -91,3 +91,18 @@ Elevar o sistema a um patamar corporativo (SaaS Edge/Premium), adotando rigoroso
    - **Filtro de Natureza de Operação:** O sistema passa a ler a tag `<natOp>` (Natureza da Operação) do XML. 
    - Apenas notas contendo "Venda" ou "Locação" são somadas no KPI de Total Faturado, Dashboard Executivo e Velocidade de Vendas.
    - Operações como "Brinde", "Transferência", "Remessa", "Devolução" serão separadas e somadas em um extrato isolado chamado "Operações Sem Efeito de Caixa (Non-Revenue)", mantendo a contabilidade da meta limpa.
+
+5. **Nova Funcionalidade: Responsividade Total (V3 - Mobile Experience)**
+   - **Layout Adaptável:** Transição suave entre desktop (sidebar fixa) e mobile (menu hamburguer/sobreposição).
+   - **Barra de Filtros Inteligente:** Reorganização automática dos filtros de uma grade horizontal para uma coluna em telas menores, utilizando Gap e Flexbox.
+   - **Tabelas Responsivas:** Implementação de contêineres de rolagem horizontal para evitar quebras de layout em dispositivos móveis.
+   - **Otimização de Espaçamento:** Ajuste de margens, paddings e tamanhos de fonte (unidades relativas) para maximizar a legibilidade em telas pequenas.
+   - **Controle de Scroll:** Substituição de `overflow: hidden` por um sistema de scroll controlado no contêiner principal, garantindo acesso a todo o conteúdo.
+
+## Plano de Ação Atual: Responsividade 100%
+
+1.  **Refatoração do CSS Base:** Ajustar o `app-container` para gerenciar o layout de forma dinâmica com Media Queries.
+2.  **Menu Mobile:** Criar um mecanismo de toggle para a sidebar em telas inferiores a 768px.
+3.  **Filtros Adaptativos:** Transformar o `global-filter-bar` em um layout flexível ou grid multi-linha.
+4.  **Gráficos e Tabelas:** Garantir que todos os componentes de visualização de dados redimensionem corretamente.
+5.  **Ajustes de UI Final:** Polir sombras e bordas para telas pequenas, garantindo o "Efeito WOW" em qualquer dispositivo.
