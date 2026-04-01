@@ -662,17 +662,33 @@ class NfeReportGenerator extends HTMLElement {
                             <label style="font-size: 0.65rem; font-weight: 900; color: #64748b; margin-bottom: 8px; display: block; text-transform: uppercase;">Natureza</label>
                             <select id="filter-natureza" style="width:100%;">
                                 <option value="">Todas</option>
-                                <option value="VENDA">Vendas</option>
+                                <option value="SAIDA">Vendas (Saídas)</option>
                                 <option value="LOCAÇÃO">Locação</option>
-                                <option value="TRANSFERÊNCIA">Transferência</option>
-                                <option value="AMOSTRA/BRINDE">Amostras/Brindes</option>
-                                <option value="DEVOLUÇÃO">Devolução</option>
+                                <option value="SERVIÇO">Serviços</option>
+                                <option value="TRANSFERENCIA">Transferência</option>
+                                <option value="BRINDE">Amostras/Brindes</option>
+                                <option value="DEMO">Demonstração</option>
+                                <option value="IMPORTAÇÃO">Importação</option>
+                                <option value="COMODATO">Comodato</option>
+                                <option value="DEVOLUÇÃO">Devolução / Cancelada</option>
                             </select>
                         </div>
                         <div>
                             <label style="font-size: 0.65rem; font-weight: 900; color: #64748b; margin-bottom: 8px; display: block; text-transform: uppercase;">Vendedor</label>
                             <select id="filter-vendedor" style="width:100%;">
-                                <option value="">Todos</option>
+                                <option value="">Todos Vendedores</option>
+                                <option value="FELIPE">FELIPE</option>
+                                <option value="PAULO">PAULO</option>
+                                <option value="JOHN">JOHN</option>
+                                <option value="SARAH">SARAH</option>
+                                <option value="MATHEUS">MATHEUS</option>
+                                <option value="JOAO SOUSA">JOÃO SOUSA</option>
+                                <option value="JOAO GOMES">JOÃO GOMES</option>
+                                <option value="WENDEL">WENDEL</option>
+                                <option value="VINICIUS">VINICIUS</option>
+                                <option value="ISAAC">ISAAC</option>
+                                <option value="BIANCA">BIANCA</option>
+                                <option value="JONATHAN">JONATHAN</option>
                             </select>
                         </div>
                         <div>
