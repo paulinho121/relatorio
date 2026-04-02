@@ -1115,71 +1115,68 @@ class NfeReportGenerator extends HTMLElement {
                             </select>
                         </div>
                         <div>
-                            <label style="font-size: 0.65rem; font-weight: 800; color: #64748b; margin-bottom: 6px; display: block; text-transform: uppercase;">Frete</label>
+                            <label style="font-size: 0.65rem; font-weight: 800; color: #64748b; margin-bottom: 6px; display: block; text-transform: uppercase;">Logística</label>
                             <select id="filter-frete" style="width:100%; border-color: #ccfbf1; background: #f0fdfa;">
-                                <option value="all">LOG</option>
-                                <option value="with">COM</option>
+                                <option value="all">Filtro Frete</option>
+                                <option value="with">Com Valor Frete</option>
                             </select>
                         </div>
                         <div>
-                            <label style="font-size: 0.65rem; font-weight: 800; color: #64748b; margin-bottom: 6px; display: block; text-transform: uppercase;">Difal</label>
+                            <label style="font-size: 0.65rem; font-weight: 800; color: #64748b; margin-bottom: 6px; display: block; text-transform: uppercase;">Fiscal (DIFAL)</label>
                             <select id="filter-difal" style="width:100%; border-color: #dbeafe; background: #eff6ff;">
-                                <option value="all">FISC</option>
-                                <option value="with">DIF</option>
+                                <option value="all">Filtro Impostos</option>
+                                <option value="with">Somente com DIFAL</option>
                             </select>
                         </div>
                     </div>
 
                     <div id="view-dashboard" class="view active">
 
-                        <!-- COMMAND CENTER (LEVEL 1) -->
-                        <div class="kpi-grid">
-                            <div class="kpi-stat" style="background: linear-gradient(135deg, var(--primary) 0%, #2e8b57 100%); color: white; min-height: 180px; justify-content: center;">
-                                <div style="display:flex; justify-content: space-between; align-items: center;">
-                                    <span class="kpi-title" style="color: rgba(255,255,255,0.7);">Faturado Mês (BRL)</span>
-                                    <div id="kpi-pacing-indicator" style="background: rgba(255,255,255,0.2); width: 12px; height: 12px; border-radius: 50%;"></div>
+                        <!-- ELITE KPI PERFORMANCE SUITE (SINGLE ROW) -->
+                        <div class="elite-kpi-suite" style="display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr; gap: 12px; margin-bottom: 2rem;">
+                            <!-- FATURADO -->
+                            <div class="kpi-stat" style="background: linear-gradient(135deg, var(--primary) 0%, #2e8b57 100%); color: white; min-height: 100px; justify-content: center; padding: 1rem; border:none;">
+                                <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                                    <span style="font-size: 0.55rem; font-weight: 900; opacity: 0.8; text-transform: uppercase;">Faturado Mês</span>
+                                    <div id="kpi-pacing-indicator" style="background: rgba(255,255,255,0.2); width: 8px; height: 8px; border-radius: 50%;"></div>
                                 </div>
-                                <div class="kpi-value" id="kpi-faturado" style="font-size: 2.8rem; color: white; margin: 15px 0;">R$ 0,00</div>
-                                <div style="display: flex; gap: 10px; align-items: center;">
-                                    <div style="background: rgba(255,255,255,0.2); flex: 1; height: 8px; border-radius: 10px; overflow: hidden;">
-                                        <div id="kpi-progress-bar" style="height: 100%; background: #ffffff; width: 0%; box-shadow: 0 0 15px white;"></div>
+                                <div id="kpi-faturado" style="font-size: 1.6rem; font-weight: 900; font-family: 'Outfit', sans-serif;">R$ 0,00</div>
+                                <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+                                    <div style="background: rgba(255,255,255,0.2); flex: 1; height: 4px; border-radius: 10px; overflow: hidden;">
+                                        <div id="kpi-progress-bar" style="height: 100%; background: #ffffff; width: 0%;"></div>
                                     </div>
-                                    <span style="font-weight: 900; font-family: 'Outfit', sans-serif;" id="kpi-percentage">0%</span>
+                                    <span style="font-size: 0.65rem; font-weight: 900;" id="kpi-percentage">0%</span>
                                 </div>
                             </div>
-                            
-                            <div class="kpi-stat" style="border-left: 6px solid var(--secondary); background: white;">
-                                <span class="kpi-title" id="forecast-label">Projeção Final</span>
-                                <div class="kpi-value" id="kpi-forecast" style="color: var(--secondary); font-size: 2.4rem;">R$ 0,00</div>
-                                <div class="kpi-sub" id="kpi-forecast-sub" style="font-weight: 800; color: var(--muted);">Tendência em relação à meta</div>
-                            </div>
-                        </div>
 
-                        <!-- OPERATION CENTER (LEVEL 2) -->
-                        <div class="operation-center">
-                            <div class="glass-card" style="padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between;">
-                                <div>
-                                    <span class="kpi-title" style="font-size: 0.65rem;">HOJE</span>
-                                    <div class="kpi-value" id="kpi-today" style="font-size: 1.2rem; margin: 4px 0;">R$ 0,00</div>
-                                </div>
-                                <div class="glass-card" style="padding: 6px; border-radius: 8px; background: #eef7f1; border: none;">💰</div>
+                            <!-- PROJEÇÃO -->
+                            <div class="kpi-stat" style="padding: 12px 15px; border-left: 4px solid var(--secondary); background: white; min-height: 100px;">
+                                <span style="font-size: 0.55rem; font-weight: 900; color: #64748b; text-transform: uppercase;">Projeção Final</span>
+                                <div id="kpi-forecast" style="font-size: 1.4rem; font-weight: 900; color: var(--secondary); margin: 2px 0;">R$ 0,00</div>
+                                <div id="kpi-forecast-sub" style="font-size: 0.5rem; font-weight: 800; color: #94a3b8;">Tendência Mensal</div>
                             </div>
-                            <div class="glass-card" style="padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between;">
-                                <div>
-                                    <span class="kpi-title" style="font-size: 0.65rem;">VELOCIDADE</span>
-                                    <div class="kpi-value" id="kpi-velocity-daily" style="font-size: 1.2rem; margin: 4px 0;">R$ 0,00/dia</div>
-                                </div>
-                                <div class="glass-card" style="padding: 6px; border-radius: 8px; background: #f0f9ff; border: none;">⚡</div>
+
+                            <!-- HOJE -->
+                            <div class="kpi-stat" style="padding: 12px 15px; background: white; min-height: 100px;">
+                                <span style="font-size: 0.55rem; font-weight: 900; color: #64748b; text-transform: uppercase;">Faturado Hoje</span>
+                                <div id="kpi-today" style="font-size: 1.1rem; font-weight: 900; color: #0f172a; margin-top: 5px;">R$ 0,00</div>
+                                <div style="font-size: 0.5rem; margin-top: auto; color: #34a85a; font-weight: 800;">Realtime 💰</div>
                             </div>
-                            <div class="glass-card" style="padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between;">
-                                <div>
-                                    <span class="kpi-title" style="font-size: 0.65rem;">LOGÍSTICA & IMPOSTOS</span>
-                                    <div style="display:flex; gap: 15px; margin-top: 5px;">
-                                        <div><small style="font-weight:800; color:var(--muted);">F:</small> <span id="kpi-frete" style="font-weight:800; font-size:0.8rem;">0</span></div>
-                                        <div><small style="font-weight:800; color:var(--muted);">D:</small> <span id="kpi-difal" style="font-weight:800; font-size:0.8rem;">0</span></div>
-                                    </div>
+
+                            <!-- VELOCIDADE -->
+                            <div class="kpi-stat" style="padding: 12px 15px; background: white; min-height: 100px;">
+                                <span style="font-size: 0.55rem; font-weight: 900; color: #64748b; text-transform: uppercase;">Média Diária</span>
+                                <div id="kpi-velocity-daily" style="font-size: 0.95rem; font-weight: 900; color: #0f172a; margin-top: 5px;">R$ 0/dia</div>
+                                <div style="font-size: 0.5rem; margin-top: auto; color: var(--secondary); font-weight: 800;">Velocidade ⚡</div>
+                            </div>
+
+                            <!-- IMPOSTOS -->
+                            <div class="kpi-stat" style="padding: 12px 15px; background: #f8fafc; border: 1px dashed #e2e8f0; min-height: 100px;">
+                                <span style="font-size: 0.55rem; font-weight: 900; color: #64748b; text-transform: uppercase;">Fisco & Logística</span>
+                                <div style="margin-top: 5px; display:flex; flex-direction:column; gap:2px;">
+                                    <div style="font-size: 0.7rem; font-weight: 800; color: #0d9488;">F: <span id="kpi-frete">R$ 0,00</span></div>
+                                    <div style="font-size: 0.7rem; font-weight: 800; color: #3b82f6;">D: <span id="kpi-difal">R$ 0,00</span></div>
                                 </div>
-                                <div class="glass-card" style="padding: 6px; border-radius: 8px; background: #f5f3ff; border: none;">🚚</div>
                             </div>
                         </div>
 
