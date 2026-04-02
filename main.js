@@ -10,6 +10,126 @@ if (typeof window.supabase !== 'undefined') {
 
 // --- UTILS & SERVICES ---
 
+// 🌐 THREE.JS DOTTED SURFACE COMPONENT
+class DottedSurface extends HTMLElement {
+    constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+    }
+
+    connectedCallback() {
+        this.render();
+        this.initThree();
+    }
+
+    render() {
+        this.shadowRoot.innerHTML = `
+            <style>
+                :host {
+                    display: block;
+                    position: fixed;
+                    inset: 0;
+                    z-index: -1;
+                    pointer-events: none;
+                    background: var(--bg);
+                }
+                #container { width: 100%; height: 100%; opacity: 0.8; }
+            </style>
+            <div id="container"></div>
+        `;
+    }
+
+    initThree() {
+        if (!window.THREE) return;
+        const container = this.shadowRoot.getElementById('container');
+        const SEPARATION = 150;
+        const AMOUNTX = 40;
+        const AMOUNTY = 60;
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(0xf9f9fa, 2000, 10000);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
+        camera.position.set(0, 355, 1220);
+
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x000000, 0); 
+        container.appendChild(renderer.domElement);
+
+        const positions = [];
+        const colors = [];
+        const geometry = new THREE.BufferGeometry();
+
+        for (let ix = 0; ix < AMOUNTX; ix++) {
+            for (let iy = 0; iy < AMOUNTY; iy++) {
+                const x = ix * SEPARATION - (AMOUNTX * SEPARATION) / 2;
+                const z = iy * SEPARATION - (AMOUNTY * SEPARATION) / 2;
+                positions.push(x, 0, z);
+                // Verde Google: #34a85a (partículas em escala normalizada para Three.js)
+                colors.push(0.2, 0.65, 0.35); 
+            }
+        }
+
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+        const material = new THREE.PointsMaterial({
+            size: 6,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.3,
+            sizeAttenuation: true
+        });
+
+        const points = new THREE.Points(geometry, material);
+        scene.add(points);
+
+        let count = 0;
+        const animate = () => {
+            if (!this.isConnected) return;
+            this._animId = requestAnimationFrame(animate);
+            const posAttr = geometry.attributes.position;
+            const posArray = posAttr.array;
+            let i = 0;
+            for (let ix = 0; ix < AMOUNTX; ix++) {
+                for (let iy = 0; iy < AMOUNTY; iy++) {
+                    const idx = i * 3;
+                    posArray[idx + 1] = Math.sin((ix + count) * 0.3) * 50 + Math.sin((iy + count) * 0.5) * 50;
+                    i++;
+                }
+            }
+            posAttr.needsUpdate = true;
+            renderer.render(scene, camera);
+            count += 0.05;
+        };
+
+        const onResize = () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        };
+        window.addEventListener('resize', onResize);
+        animate();
+
+        this._cleanup = () => {
+            window.removeEventListener('resize', onResize);
+            cancelAnimationFrame(this._animId);
+            renderer.dispose();
+            geometry.dispose();
+            material.dispose();
+        };
+    }
+
+    disconnectedCallback() {
+        if (this._cleanup) this._cleanup();
+    }
+}
+customElements.define('dotted-surface', DottedSurface);
+
+// --- UTILS & SERVICES ---
+
 const escapeHTML = (str) => {
     if (str == null) return '';
     return String(str)
@@ -83,28 +203,63 @@ class NfeParserService {
                     const naturezaOperacaoRaw = getValue(ide, 'natOp') || 'N/A';
                     const natOpUpper = (getValue(ide, 'natOp') || 'N/A').toUpperCase();
                     const isExit = getValue(ide, 'tpNF') === '1';
-                    let natureType = 'OUTROS';
-
-                    if (natOpUpper.includes('VENDA') || natOpUpper.includes('LOCA') || natOpUpper.includes('PREST')) {
-                        natureType = (natOpUpper.includes('LOCA') || natOpUpper.includes('ALUG')) ? 'LOCAÇÃO' : 'VENDA';
-                    }
-
-                    if (natOpUpper.includes('RETORNO')) {
-                        natureType = 'RETORNO';
-                    } else if (natOpUpper.includes('TRANSF') || natOpUpper.includes('REMESSA P/ FILIAL')) {
-                        natureType = 'TRANSFERÊNCIA';
-                    } else if (natOpUpper.includes('AMOSTRA') || natOpUpper.includes('BRINDE') || natOpUpper.includes('BONIF')) {
-                        natureType = 'AMOSTRA/BRINDE';
-                    } else if (natOpUpper.includes('DEVOLU')) {
-                        natureType = 'DEVOLUÇÃO';
-                    }
-
+                    const indIEDest = getValue(dest, 'indIEDest');
+                    const isContribuinte = indIEDest === '1';
+                    
                     const cnpjEmit = getValue(emit, 'CNPJ');
+                    const cnpjDest = getValue(dest, 'CNPJ');
                     let branchName = getValue(emit, 'xNome') || 'N/A';
                     
-                    if (cnpjEmit === '05502390000111') branchName = 'MATRIZ (CE)';
-                    else if (cnpjEmit === '05502390000200') branchName = 'FILIAL (SC)';
-                    else if (cnpjEmit === '05502390000383' || cnpjEmit?.includes('383')) branchName = 'FILIAL (SP)';
+                    // Lógica inteligente de identificação de filial (Emitente ou Destinatário)
+                    const myCnpjs = {
+                        '05502390000111': 'MATRIZ (CE)',
+                        '05502390000200': 'FILIAL (SC)',
+                        '05502390000383': 'FILIAL (SP)'
+                    };
+                    
+                    // Sanitização de CNPJ (Remove tudo o que não for número)
+                    const cleanCnpj = (val) => String(val || "").replace(/\D/g, "");
+                    const cnpjEmitClean = cleanCnpj(cnpjEmit);
+                    const cnpjDestClean = cleanCnpj(cnpjDest);
+
+                    if (myCnpjs[cnpjEmitClean]) {
+                        branchName = myCnpjs[cnpjEmitClean];
+                    } else if (myCnpjs[cnpjDestClean]) {
+                        branchName = myCnpjs[cnpjDestClean];
+                    }
+
+                    let natureType = 'OUTROS';
+
+                    // NOVO MAPEAMENTO DE NATUREZA (Prioriza filtros de não-receita primeiro)
+                    if (natOpUpper.includes('RETORNO')) {
+                        natureType = natOpUpper.includes('LOCA') ? 'RETORNO DE LOCAÇÃO' : 'RETORNO';
+                    } else if (natOpUpper.includes('DEVOLU')) {
+                        natureType = 'DEVOLUÇÃO';
+                    } else if (natOpUpper.includes('AMOSTRA') || natOpUpper.includes('BRINDE') || natOpUpper.includes('BONIF')) {
+                        natureType = 'AMOSTRA/BRINDE';
+                    } else if (natOpUpper.includes('TRANSF') || natOpUpper.includes('REMESSA P/ FILIAL')) {
+                        natureType = 'TRANSFERÊNCIA';
+                    } else if (natOpUpper.includes('VENDA')) {
+                        natureType = isContribuinte ? 'VENDAS CONTRIBUINTES' : 'VENDAS NÃO CONTRIBUINTES';
+                    } else if (natOpUpper.includes('LOCA') || natOpUpper.includes('ALUG')) {
+                        natureType = 'SAÍDA DE LOCAÇÃO';
+                    }
+
+
+                    // CÁLCULO ROBUSTO DE DIFAL/TAXAS
+                    let vDifal = parseFloat(getValue(ICMSTot, 'vICMSUFDest') || 0) + parseFloat(getValue(ICMSTot, 'vFCPUFDest') || 0);
+                    
+                    // Se o totalizador estiver zerado, busca nos itens (det)
+                    if (vDifal === 0) {
+                        const items = infNFe.getElementsByTagName('det');
+                        for (let i = 0; i < items.length; i++) {
+                            const icmsuf = items[i].getElementsByTagName('ICMSUFDest')[0];
+                            if (icmsuf) {
+                                vDifal += parseFloat(getValue(icmsuf, 'vICMSUFDest') || 0);
+                                vDifal += parseFloat(getValue(icmsuf, 'vFCPUFDest') || 0);
+                            }
+                        }
+                    }
 
                     resolve({
                         filial: branchName,
@@ -112,7 +267,7 @@ class NfeParserService {
                         numeroNota: getValue(ide, 'nNF') || 'N/A',
                         naturezaOperacao: natureType,
                         naturezaOriginal: natOpUpper,
-                        isRevenue: isExit && (natureType === 'VENDA' || natureType === 'LOCAÇÃO'),
+                        isRevenue: isExit && ['VENDAS CONTRIBUINTES', 'VENDAS NÃO CONTRIBUINTES', 'SAÍDA DE LOCAÇÃO'].includes(natureType),
                         isDemo: natureType === 'AMOSTRA/BRINDE',
                         isDevolucao: natureType === 'DEVOLUÇÃO',
                         isRetorno: natureType === 'RETORNO',
@@ -131,9 +286,27 @@ class NfeParserService {
                         contribuinte: { '1': 'Sim', '2': 'Isento', '9': 'Não' }[getValue(dest, 'indIEDest')] || 'N/I',
                         frete: freteValor > 0 ? `Sim (R$ ${freteValor.toFixed(2)})` : ({ '0': 'Emitente', '1': 'Destinatário', '9': 'Não' })[modFrete] || 'N/I',
                         valorFrete: freteValor,
-                        valorFaturado: parseFloat(getValue(ICMSTot, 'vNF') || 0) + parseFloat(getValue(ICMSTot, 'vFCPUFDest') || 0),
+                        difal: vDifal,
+                        valorFaturado: parseFloat(getValue(ICMSTot, 'vNF') || 0),
                         dataEmissao: getValue(ide, 'dhEmi')?.substring(0, 10) || new Date().toISOString().substring(0, 10),
-                        vendedor: 'NFe (XML)',
+                        vendedor: (() => {
+                            const infAdic = nfeNode.getElementsByTagName('infAdic')[0];
+                            const infCpl = getValue(infAdic, 'infCpl') || '';
+                            const infAdFisco = getValue(infAdic, 'infAdFisco') || '';
+                            const allInfo = (infCpl + ' ' + infAdFisco).toUpperCase();
+                            
+                            const matches = [
+                                /VENDEDOR[:\-\s]+([A-Z\sÀ-Ú]+)/i,
+                                /VEND[:\-\s]+([A-Z\sÀ-Ú]+)/i,
+                                /REP[:\-\s]+([A-Z\sÀ-Ú]+)/i
+                            ];
+                            
+                            for (const regex of matches) {
+                                const match = allInfo.match(regex);
+                                if (match && match[1]) return match[1].trim().split('\n')[0].substring(0, 20);
+                            }
+                            return 'NAO ATRIBUIDO';
+                        })(),
                         formaPagamento: ({ '01': 'Dinheiro', '02': 'Cheque', '03': 'Cartão Crédito', '04': 'Cartão Débito', '15': 'Boleto', '90': 'Sem Pagto', '99': 'Outros' })[infNFe.getElementsByTagName('tPag')[0]?.textContent] || 'Outros',
                         parcelas: infNFe.getElementsByTagName('dup').length || 1,
                         isCanceled: !!isCanceled,
@@ -253,18 +426,21 @@ class NfeParserService {
                 }
             });
 
-            // LOGICA DE RECEITA (Whitelist estrita para bater com o gabarito de 1.7M)
-            const revenueTypes = ['SAIDA', 'LOCAÇÃO', 'SERVIÇO'];
-            const isRevenue = revenueTypes.includes(natureza);
+            // LOGICA DE RECEITA EXCLUSIVA (Conforme pedido)
+            const isRevenue = ['VENDAS CONTRIBUINTES', 'VENDAS NÃO CONTRIBUINTES', 'SAÍDA DE LOCAÇÃO', 'SAIDA', 'LOCAÇÃO','VENDA'].some(t => natureza.toUpperCase().includes(t));
+            let natureNameFixed = natureza.toUpperCase();
+            if (natureNameFixed === 'VENDA' || natureNameFixed === 'SAIDA') natureNameFixed = 'VENDAS CONTRIBUINTES';
+            if (natureNameFixed === 'LOCAÇÃO') natureNameFixed = 'SAÍDA DE LOCAÇÃO';
 
             if (valor !== 0 || nota) {
                 results.push({
                     filial: estado || 'MCI IMPORT',
                     filialUF: estado || 'N/A',
                     numeroNota: nota || 'PASTE-' + Date.now() + Math.random(),
-                    naturezaOperacao: natureza,
+                    naturezaOperacao: natureNameFixed,
                     isRevenue: isRevenue,
                     isCanceled: natureza.includes('CANCELADA') || natureza.includes('DEVOLUÇÃO'),
+                    isExit: true, // No importar via texto, assume-se saída (venda) por padrão
                     cliente: cliente,
                     cidade: '', estado: estado,
                     valorFrete: 0, difal: 0,
@@ -400,6 +576,7 @@ class NfeReportGenerator extends HTMLElement {
         this.attachShadow({ mode: 'open' });
         this.currentView = 'dashboard';
         this.reportData = [];
+        this.drilldownFilter = null; // Para filtros via cliques em gráficos (ex: vendedor)
         this.render();
     }
 
@@ -409,11 +586,17 @@ class NfeReportGenerator extends HTMLElement {
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@400;700;900&display=swap');
 
                 :host {
-                    --accent: #0d9488;
-                    --accent-glow: rgba(13, 148, 136, 0.4);
-                    --bg: #f8fafc;
+                    --primary: #34a85a;
+                    --secondary: #6495ed;
+                    --accent: #66d9ef;
+                    --bg: #f9f9fa;
+                    --sidebar: #f9f9fa;
+                    --foreground: #333333;
+                    --card: #ffffff;
+                    --border: #d4d4d4;
+                    --muted: #6e6e6e;
+                    --radius: 0.5rem;
                     --panel: rgba(255, 255, 255, 0.8);
-                    --border: rgba(226, 232, 240, 0.8);
                     --noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
                 }
 
@@ -431,9 +614,78 @@ class NfeReportGenerator extends HTMLElement {
                     font-family: 'Inter', sans-serif;
                     overflow: hidden;
                     position: relative;
+                    transition: grid-template-columns 0.4s cubic-bezier(0.16, 1, 0.3, 1);
                 }
 
-                aside { grid-area: sidebar; z-index: 200; transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+                @media (max-width: 1024px) {
+                    .app-container {
+                        grid-template-areas: "mobile-header" "content";
+                        grid-template-columns: 1fr;
+                        grid-template-rows: auto 1fr;
+                    }
+                    .sidebar-collapse-btn { display: none !important; }
+                }
+                
+                .app-container.sidebar-collapsed {
+                    grid-template-columns: 80px 1fr;
+                }
+
+                aside { 
+                    grid-area: sidebar; 
+                    z-index: 300; 
+                    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+                    background: var(--sidebar);
+                    border-right: 1px solid var(--border);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1.5rem;
+                    padding: 2rem 1.2rem;
+                    position: relative;
+                }
+
+                @media (max-width: 1024px) {
+                    aside {
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 280px;
+                        height: 100vh;
+                        transform: translateX(-100%);
+                        box-shadow: 20px 0 50px rgba(0,0,0,0.1);
+                        padding: 1.5rem;
+                    }
+                    aside.open { transform: translateX(0); }
+                }
+                
+                .sidebar-collapsed aside { padding: 2rem 0.6rem; }
+                
+                .sidebar-collapsed .brand-zone h1,
+                .sidebar-collapsed .brand-zone p,
+                .sidebar-collapsed .nav-item span,
+                .sidebar-collapsed .sidebar-footer-info,
+                .sidebar-collapsed .fiscal-period-label {
+                    display: none;
+                }
+
+                .sidebar-collapse-btn {
+                    position: absolute;
+                    right: -12px;
+                    top: 24px;
+                    width: 24px;
+                    height: 24px;
+                    background: var(--primary);
+                    color: white;
+                    border: none;
+                    border-radius: 50%;
+                    display: grid;
+                    place-items: center;
+                    cursor: pointer;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+                    z-index: 301;
+                    transition: transform 0.3s;
+                }
+                .sidebar-collapsed .sidebar-collapse-btn { transform: rotate(180deg); }
+
                 main { grid-area: content; overflow-y: auto; padding: 2rem; position: relative; }
 
                 @media (max-width: 1024px) {
@@ -450,22 +702,21 @@ class NfeReportGenerator extends HTMLElement {
                 /* MOBILE HEADER */
                 .mobile-header {
                     display: none;
-                    background: #0f172a;
-                    color: white;
+                    background: var(--sidebar);
+                    color: var(--foreground);
                     padding: 1rem 1.5rem;
                     align-items: center;
                     justify-content: space-between;
                     position: sticky;
                     top: 0;
                     z-index: 100;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                    .mobile-header { display: flex; }
+                    border-bottom: 1px solid var(--border);
                 }
 
                 .menu-toggle {
                     background: transparent;
                     border: none;
-                    color: white;
+                    color: var(--foreground);
                     font-size: 1.5rem;
                     cursor: pointer;
                     display: flex;
@@ -475,16 +726,15 @@ class NfeReportGenerator extends HTMLElement {
 
                 /* SIDEBAR LUXURY */
                 aside {
-                    background: #0f172a;
-                    color: white;
+                    background: var(--sidebar);
+                    color: var(--foreground);
                     padding: 2rem 1.2rem;
                     display: flex;
                     flex-direction: column;
                     gap: 1.5rem;
-                    box-shadow: 15px 0 40px rgba(0,0,0,0.1);
+                    border-right: 1px solid var(--border);
                     z-index: 200;
                     position: relative;
-                    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
                 }
 
                 @media (max-width: 1024px) {
@@ -522,12 +772,12 @@ class NfeReportGenerator extends HTMLElement {
 
                 .brand-logo {
                     width: 48px; height: 48px;
-                    background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+                    background: linear-gradient(135deg, var(--primary) 0%, #4caf50 100%);
                     border-radius: 16px;
                     display: grid; place-items: center;
                     font-family: 'Outfit', sans-serif;
                     font-weight: 900; font-size: 1.5rem;
-                    box-shadow: 0 10px 20px rgba(13, 148, 136, 0.3);
+                    box-shadow: 0 10px 20px rgba(52, 168, 90, 0.3);
                 }
 
                 .nav-item {
@@ -539,24 +789,26 @@ class NfeReportGenerator extends HTMLElement {
                     gap: 16px;
                     transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
                     font-weight: 600;
-                    color: #94a3b8;
+                    color: var(--muted);
                     border: 1px solid transparent;
                     background: transparent;
                     width: 100%;
                     text-align: left;
                     font-size: 0.9rem;
+                    white-space: nowrap;
                 }
+                .sidebar-collapsed .nav-item { justify-content: center; padding: 16px 12px; }
 
-                .nav-item:hover { background: rgba(255,255,255,0.05); color: white; transform: translateX(5px); }
+                .nav-item:hover { background: rgba(52, 168, 90, 0.05); color: var(--primary); transform: translateX(5px); }
                 .nav-item.active { 
-                    background: #1e293b; 
-                    color: #5eead4; 
-                    border: 1px solid rgba(255,255,255,0.1);
-                    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+                    background: #eef7f1; 
+                    color: var(--primary); 
+                    border: 1px solid #d8eadc;
+                    box-shadow: 0 4px 12px rgba(52, 168, 90, 0.1);
                     position: relative;
                 }
                 .nav-item.active::after {
-                    content: ''; position: absolute; left: -10px; width: 4px; height: 24px; background: #5eead4; border-radius: 10px; box-shadow: 0 0 15px #5eead4;
+                    content: ''; position: absolute; left: -10px; width: 4px; height: 24px; background: var(--primary); border-radius: 10px; box-shadow: 0 0 15px var(--primary);
                 }
 
                 /* MAIN SURFACE */
@@ -565,7 +817,7 @@ class NfeReportGenerator extends HTMLElement {
                     overflow-y: auto;
                     position: relative;
                     scroll-behavior: smooth;
-                    background: radial-gradient(circle at top right, rgba(20, 184, 166, 0.03) 0%, transparent 40%);
+                    background: radial-gradient(circle at top right, rgba(52, 168, 90, 0.03) 0%, transparent 40%);
                 }
 
                 @media (max-width: 640px) {
@@ -623,12 +875,24 @@ class NfeReportGenerator extends HTMLElement {
                     box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02), 0 10px 25px -5px rgba(0,0,0,0.05);
                     margin-bottom: 1.5rem;
                     position: relative;
-                    overflow: hidden;
                 }
 
-                .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.2rem; margin-bottom: 2rem; }
+                @media (max-width: 640px) {
+                    .glass-card { padding: 1rem; border-radius: 16px; margin-bottom: 1rem; }
+                }
+                }
+
+                .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem; }
                 
-                .chart-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1.2rem; margin-bottom: 2rem; align-items: start; }
+                .operation-center { 
+                    display: grid; 
+                    grid-template-columns: 1fr 1fr 1fr; 
+                    gap: 1.2rem; 
+                    margin-bottom: 2.5rem; 
+                }
+                @media (max-width: 900px) { .operation-center { grid-template-columns: 1fr; } }
+
+                .chart-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 2rem; margin-bottom: 2.5rem; align-items: start; }
                 @media (max-width: 1200px) { .chart-grid { grid-template-columns: 1fr; } }
 
                 .kpi-stat {
@@ -659,6 +923,35 @@ class NfeReportGenerator extends HTMLElement {
                     max-width: 100%;
                 }
                 
+                .command-center {
+                    display: grid;
+                    grid-template-columns: 2fr 1.2fr;
+                    gap: 1.5rem;
+                    margin-bottom: 1.5rem;
+                }
+
+                @media (max-width: 1024px) {
+                    .command-center { grid-template-columns: 1fr; }
+                }
+
+                .operation-center {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                    gap: 1.5rem;
+                    margin-bottom: 1.5rem;
+                }
+
+                .chart-grid {
+                    display: grid;
+                    grid-template-columns: 2fr 1fr;
+                    gap: 1.5rem;
+                    margin-bottom: 1.5rem;
+                }
+
+                @media (max-width: 1024px) {
+                    .chart-grid { grid-template-columns: 1fr; }
+                }
+
                 /* BUTTONS PREMIER */
                 .btn {
                     padding: 10px 20px; border-radius: 12px; font-weight: 700;
@@ -669,9 +962,21 @@ class NfeReportGenerator extends HTMLElement {
                 .btn-primary:hover { background: #1e293b; transform: translateY(-2px); box-shadow: 0 15px 30px rgba(15, 23, 42, 0.15); }
 
                 /* TABLE LUXE */
-                table { width: 100%; border-collapse: separate; border-spacing: 0 10px; }
-                th { color: #64748b; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; padding: 1rem; border: none; }
-                td { background: white; padding: 1rem 1.2rem; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; transition: all 0.3s; font-size: 0.85rem; }
+                .table-wrapper { 
+                    background: white; 
+                    border-radius: 24px; 
+                    border: 1px solid var(--border); 
+                    overflow: auto; 
+                    max-height: 800px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.02);
+                }
+                table { width: 100%; border-collapse: separate; border-spacing: 0; }
+                thead { position: sticky; top: 0; z-index: 50; }
+                th { 
+                    background: #f8fafc; color: #64748b; font-size: 0.7rem; font-weight: 800; 
+                    text-transform: uppercase; letter-spacing: 1px; padding: 1.2rem; border-bottom: 1px solid var(--border); 
+                }
+                td { background: white; padding: 1rem 1.2rem; border-bottom: 1px solid #f1f5f9; transition: all 0.3s; font-size: 0.85rem; }
                 td:first-child { border-left: 1px solid #f1f5f9; border-radius: 16px 0 0 16px; }
                 td:last-child { border-right: 1px solid #f1f5f9; border-radius: 0 16px 16px 0; }
                 tr:hover td { transform: scale(1.005); box-shadow: 0 4px 12px rgba(0,0,0,0.02); z-index: 10; }
@@ -696,6 +1001,7 @@ class NfeReportGenerator extends HTMLElement {
             </style>
 
             <div class="app-container">
+                <dotted-surface></dotted-surface>
                 <div class="overlay" id="sidebar-overlay"></div>
                 
                 <div class="mobile-header">
@@ -707,40 +1013,42 @@ class NfeReportGenerator extends HTMLElement {
                 </div>
 
                 <aside id="app-sidebar">
-                    <div class="brand-zone">
-                        <div class="brand-logo">M</div>
+                    <button class="sidebar-collapse-btn" id="sidebar-toggle">❮</button>
+                    
+                    <div class="brand-zone" style="display:flex; align-items:center; gap:12px;">
+                        <div class="brand-logo" style="flex-shrink:0;">M</div>
                         <div>
-                            <div style="font-family: 'Outfit', sans-serif; font-weight: 900; font-size: 1.4rem; letter-spacing: -1px;">MCI Intelligence</div>
-                            <div style="font-size: 0.6rem; text-transform: uppercase; letter-spacing: 2px; color: #475569; font-weight: 900;">Elite BI Platform</div>
+                            <h1 style="font-family: 'Outfit', sans-serif; font-weight: 900; font-size: 1.2rem; letter-spacing: -1px; margin:0;">MCI Intel</h1>
+                            <p style="font-size: 0.5rem; text-transform: uppercase; letter-spacing: 1px; color: #475569; font-weight: 900; margin:0;">Elite Platform</p>
                         </div>
                     </div>
 
-                    <div style="margin-bottom: 2rem; padding: 1.5rem; background: rgba(255,255,255,0.03); border-radius: 24px; border: 1px solid rgba(255,255,255,0.05);">
-                        <p style="font-size: 0.65rem; font-weight: 900; color: #475569; margin-bottom: 12px; letter-spacing: 2px;">PERÍODO FISCAL</p>
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <select id="select-month" style="background: #1e293b; border: none; color: white; font-size: 0.8rem;">
-                                <option value="01">Janeiro</option><option value="02">Fevereiro</option><option value="03" selected>Março</option>
-                                <option value="04">Abril</option><option value="05">Maio</option><option value="06">Junho</option>
-                                <option value="07">Julho</option><option value="08">Agosto</option><option value="09">Setembro</option>
-                                <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+                    <div style="margin-bottom: 1rem; padding: 1.2rem; background: rgba(0,0,0,0.02); border-radius: 20px; border: 1px solid rgba(0,0,0,0.05);">
+                        <p class="fiscal-period-label" style="font-size: 0.6rem; font-weight: 900; color: #475569; margin-bottom: 10px; letter-spacing: 1px; text-transform: uppercase;">Período</p>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <select id="select-month" style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 0.75rem;">
+                                <option value="01">Jan</option><option value="02">Fev</option><option value="03" selected>Mar</option>
+                                <option value="04">Abr</option><option value="05">Mai</option><option value="06">Jun</option>
+                                <option value="07">Jul</option><option value="08">Ago</option><option value="09">Set</option>
+                                <option value="10">Out</option><option value="11">Nov</option><option value="12">Dez</option>
                             </select>
-                            <select id="select-year" style="background: #1e293b; border: none; color: white; font-size: 0.8rem;">
+                            <select id="select-year" style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 0.75rem;">
                                 <option value="2024">2024</option><option value="2025">2025</option><option value="2026" selected>2026</option>
                             </select>
                         </div>
                     </div>
 
-                    <nav>
-                        <button class="nav-item active" data-view="dashboard">🏠 Dashboard Elite</button>
-                        <button class="nav-item" data-view="reports">📑 Auditoria Fiscal</button>
-                        <button class="nav-item" data-view="config">⚙️ Controladoria</button>
+                    <nav style="display:flex; flex-direction:column; gap:8px;">
+                        <button class="nav-item active" data-view="dashboard" title="Dashboard"><i>🏠</i> <span>Dashboard Elite</span></button>
+                        <button class="nav-item" data-view="reports" title="Auditoria"><i>📑</i> <span>Auditoria Fiscal</span></button>
+                        <button class="nav-item" data-view="config" title="Controladoria"><i>⚙️</i> <span>Controladoria</span></button>
                     </nav>
 
-                    <div style="margin-top: auto; background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 100%); padding: 1.5rem; border-radius: 24px; border: 1px solid rgba(255,255,255,0.05);">
-                        <div style="font-size: 0.7rem; color: #475569; font-weight: 800; margin-bottom: 8px;">CONEXÃO SYNC</div>
-                        <div style="display:flex; align-items: center; gap: 10px;">
-                            <div style="width: 10px; height: 10px; background: #2dd4bf; border-radius: 50%; box-shadow: 0 0 15px #2dd4bf;"></div>
-                            <span style="font-size: 0.8rem; font-weight: 700; color: #94a3b8;">Nuvem Ativa</span>
+                    <div style="margin-top: auto; padding-top: 2rem;">
+                        <div class="sidebar-footer-info" style="font-size: 0.7rem; color: #475569; font-weight: 800; margin-bottom: 8px;">SYSTÉM STATUS</div>
+                        <div style="display:flex; align-items: center; gap: 10px; justify-content: center;">
+                            <div style="width: 10px; height: 10px; background: #2dd4bf; border-radius: 50%; box-shadow: 0 0 10px #2dd4bf; flex-shrink:0;"></div>
+                            <span class="sidebar-footer-info" style="font-size: 0.75rem; font-weight: 700; color: #64748b;">Nuvem Ativa</span>
                         </div>
                     </div>
                 </aside>
@@ -774,15 +1082,12 @@ class NfeReportGenerator extends HTMLElement {
                             <label style="font-size: 0.65rem; font-weight: 900; color: #64748b; margin-bottom: 8px; display: block; text-transform: uppercase;">Natureza</label>
                             <select id="filter-natureza" style="width:100%;">
                                 <option value="">Todas</option>
-                                <option value="SAIDA">Vendas (Saídas)</option>
-                                <option value="LOCAÇÃO">Locação</option>
-                                <option value="SERVIÇO">Serviços</option>
+                                <option value="VENDAS CONTRIBUINTES">Vendas Contribuintes</option>
+                                <option value="VENDAS NÃO CONTRIBUINTES">Vendas Não Contribuintes</option>
+                                <option value="SAÍDA DE LOCAÇÃO">Saída de Locação</option>
                                 <option value="TRANSFERENCIA">Transferência</option>
                                 <option value="BRINDE">Amostras/Brindes</option>
-                                <option value="DEMO">Demonstração</option>
-                                <option value="IMPORTAÇÃO">Importação</option>
-                                <option value="COMODATO">Comodato</option>
-                                <option value="DEVOLUÇÃO">Devolução / Cancelada</option>
+                                <option value="DEVOLUÇÃO">Devolução / Estorno</option>
                             </select>
                         </div>
                         <div>
@@ -827,33 +1132,61 @@ class NfeReportGenerator extends HTMLElement {
 
                     <div id="view-dashboard" class="view active">
 
+                        <!-- COMMAND CENTER (LEVEL 1) -->
                         <div class="kpi-grid">
-                            <div class="kpi-stat">
-                                <span class="kpi-title">Faturado Hoje</span>
-                                <div class="kpi-value" id="kpi-today">R$ 0,00</div>
-                                <div class="kpi-sub" id="kpi-today-sub">Aguardando dados...</div>
-                            </div>
-                            <div class="kpi-stat" style="background: #0f172a; color: white;">
-                                <span class="kpi-title" style="color: #475569;">Faturado Mês</span>
-                                <div class="kpi-value" id="kpi-faturado" style="color: #5eead4;">R$ 0,00</div>
-                                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; overflow: hidden; justify-content: flex-start;">
-                                    <span style="font-size: 0.75rem; font-weight: 800; background: #5eead4; color: #0f172a; padding: 2px 8px; border-radius: 6px; flex-shrink: 0;" id="kpi-percentage">0%</span>
-                                    <span style="color: #475569; font-size: 0.7rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1;">atingimento</span>
+                            <div class="kpi-stat" style="background: linear-gradient(135deg, var(--primary) 0%, #2e8b57 100%); color: white; min-height: 180px; justify-content: center;">
+                                <div style="display:flex; justify-content: space-between; align-items: center;">
+                                    <span class="kpi-title" style="color: rgba(255,255,255,0.7);">Faturado Mês (BRL)</span>
+                                    <div id="kpi-pacing-indicator" style="background: rgba(255,255,255,0.2); width: 12px; height: 12px; border-radius: 50%;"></div>
+                                </div>
+                                <div class="kpi-value" id="kpi-faturado" style="font-size: 2.8rem; color: white; margin: 15px 0;">R$ 0,00</div>
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <div style="background: rgba(255,255,255,0.2); flex: 1; height: 8px; border-radius: 10px; overflow: hidden;">
+                                        <div id="kpi-progress-bar" style="height: 100%; background: #ffffff; width: 0%; box-shadow: 0 0 15px white;"></div>
+                                    </div>
+                                    <span style="font-weight: 900; font-family: 'Outfit', sans-serif;" id="kpi-percentage">0%</span>
                                 </div>
                             </div>
-                            <div class="kpi-stat">
-                                <span class="kpi-title">Projeção Final</span>
-                                <div class="kpi-value" id="kpi-forecast">R$ 0,00</div>
-                                <div class="kpi-sub">Tendência baseada em ritmo</div>
+                            
+                            <div class="kpi-stat" style="border-left: 6px solid var(--secondary); background: white;">
+                                <span class="kpi-title" id="forecast-label">Projeção Final</span>
+                                <div class="kpi-value" id="kpi-forecast" style="color: var(--secondary); font-size: 2.4rem;">R$ 0,00</div>
+                                <div class="kpi-sub" id="kpi-forecast-sub" style="font-weight: 800; color: var(--muted);">Tendência em relação à meta</div>
                             </div>
-                            <div class="kpi-stat">
-                                <span class="kpi-title">Unidades Ativas</span>
-                                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                                    <span style="background: #f1f5f9; padding: 4px 8px; border-radius: 8px; font-size: 0.6rem; font-weight: 800;">MATRIZ</span>
-                                    <span style="background: #f1f5f9; padding: 4px 8px; border-radius: 8px; font-size: 0.6rem; font-weight: 800;">SC</span>
-                                    <span style="background: #f1f5f9; padding: 4px 8px; border-radius: 8px; font-size: 0.6rem; font-weight: 800;">SP</span>
+                        </div>
+
+                        <!-- OPERATION CENTER (LEVEL 2) -->
+                        <div class="operation-center">
+                            <div class="glass-card" style="padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between;">
+                                <div>
+                                    <span class="kpi-title" style="font-size: 0.65rem;">HOJE</span>
+                                    <div class="kpi-value" id="kpi-today" style="font-size: 1.2rem; margin: 4px 0;">R$ 0,00</div>
                                 </div>
+                                <div class="glass-card" style="padding: 6px; border-radius: 8px; background: #eef7f1; border: none;">💰</div>
                             </div>
+                            <div class="glass-card" style="padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between;">
+                                <div>
+                                    <span class="kpi-title" style="font-size: 0.65rem;">VELOCIDADE</span>
+                                    <div class="kpi-value" id="kpi-velocity-daily" style="font-size: 1.2rem; margin: 4px 0;">R$ 0,00/dia</div>
+                                </div>
+                                <div class="glass-card" style="padding: 6px; border-radius: 8px; background: #f0f9ff; border: none;">⚡</div>
+                            </div>
+                            <div class="glass-card" style="padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between;">
+                                <div>
+                                    <span class="kpi-title" style="font-size: 0.65rem;">LOGÍSTICA & IMPOSTOS</span>
+                                    <div style="display:flex; gap: 15px; margin-top: 5px;">
+                                        <div><small style="font-weight:800; color:var(--muted);">F:</small> <span id="kpi-frete" style="font-weight:800; font-size:0.8rem;">0</span></div>
+                                        <div><small style="font-weight:800; color:var(--muted);">D:</small> <span id="kpi-difal" style="font-weight:800; font-size:0.8rem;">0</span></div>
+                                    </div>
+                                </div>
+                                <div class="glass-card" style="padding: 6px; border-radius: 8px; background: #f5f3ff; border: none;">🚚</div>
+                            </div>
+                        </div>
+
+                        <!-- DATA VISUALIZATION (LEVEL 3) -->
+                        <div id="drilldown-alert" style="display:none; background: #eef7f1; color: var(--primary); padding: 12px 20px; border-radius: 12px; margin-bottom: 1.5rem; font-weight: 800; justify-content: space-between; align-items: center; border: 1px solid #d8eadc;">
+                            <span>🏆 Visualizando filtro de vendedor: <span id="drilldown-name"></span></span>
+                            <button id="clear-drilldown" class="btn" style="padding: 4px 10px; font-size: 0.7rem; background: var(--primary); color: white;">Limpar Filtro ✖</button>
                         </div>
 
                         <div class="chart-grid">
@@ -866,6 +1199,27 @@ class NfeReportGenerator extends HTMLElement {
                             <div class="glass-card">
                                 <h3>🏆 Ranking de Performance</h3>
                                 <div id="ranking-container" class="ranking-list"></div>
+                            </div>
+                        </div>
+
+                        <!-- DATA CENTER (Restauração de Importação) -->
+                        <div class="glass-card" style="margin-top: 2rem; border: 2px dashed var(--border); background: rgba(255,255,255,0.4);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+                                <h3 style="margin:0;">📥 Central de Dados (Importar XML)</h3>
+                                <div style="font-size:0.7rem; font-weight:800; color:var(--primary);">Suporta Multi-XML / Paste</div>
+                            </div>
+                            <textarea id="import-xml-paste" placeholder="Cole o conteúdo de um XML aqui ou arraste arquivos para o navegador..." style="width:100%; height:80px; margin-bottom: 1rem; border-radius: 12px; border: 1.5px solid var(--border); padding: 15px; font-family: monospace; font-size: 0.7rem;"></textarea>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                                <button class="btn btn-primary" id="btn-process-paste">Processar XML Colado 🚀</button>
+                                <button class="btn" style="background:white; border: 1px solid var(--border);" onclick="document.getElementById('xml-input').click()">📁 Selecionar Arquivos XML</button>
+                            </div>
+                            <input type="file" id="xml-input" multiple accept=".xml" style="display:none">
+                        </div>
+
+                        <div class="glass-card" style="margin-bottom: 2rem;">
+                            <h3>📊 Evolução Mensal Estratégica (BI)</h3>
+                            <div style="height: 300px; position: relative;">
+                                <canvas id="evolutionChart"></canvas>
                             </div>
                         </div>
 
@@ -970,6 +1324,21 @@ class NfeReportGenerator extends HTMLElement {
         const sidebar = shadow.getElementById('app-sidebar');
         const overlay = shadow.getElementById('sidebar-overlay');
         const menuToggle = shadow.getElementById('menu-toggle');
+        const toggleBtn = shadow.getElementById('sidebar-toggle');
+        const container = shadow.querySelector('.app-container');
+
+        // SIDEBAR COLLAPSE LOGIC (DESKTOP)
+        if (toggleBtn && container) {
+            toggleBtn.addEventListener('click', () => {
+                const isCollapsed = container.classList.toggle('sidebar-collapsed');
+                localStorage.setItem('mci_sidebar_collapsed', isCollapsed);
+            });
+            
+            // Restore state
+            if (localStorage.getItem('mci_sidebar_collapsed') === 'true') {
+                container.classList.add('sidebar-collapsed');
+            }
+        }
 
         const closeSidebar = () => {
             sidebar.classList.remove('open');
@@ -1054,8 +1423,16 @@ class NfeReportGenerator extends HTMLElement {
             const el = shadow.getElementById(id);
             if (el) {
                 const event = el.tagName === 'INPUT' ? 'input' : 'change';
-                el.addEventListener(event, () => this.updateUI());
+                el.addEventListener(event, () => {
+                    this.drilldownFilter = null; // Reseta drilldown se usuário mudar filtros globais
+                    this.updateUI();
+                });
             }
+        });
+
+        shadow.getElementById('clear-drilldown').addEventListener('click', () => {
+            this.drilldownFilter = null;
+            this.updateUI();
         });
 
         // PROCESS PASTE BUTTON
@@ -1156,18 +1533,41 @@ class NfeReportGenerator extends HTMLElement {
         
         this.populateDynamicFilters(rawPeriodData);
 
+        // APLICAR DRILLDOWN SE EXISTIR
+        const alert = shadow.getElementById('drilldown-alert');
+        if (this.drilldownFilter) {
+            alert.style.display = 'flex';
+            shadow.getElementById('drilldown-name').textContent = this.drilldownFilter.value;
+        } else {
+            alert.style.display = 'none';
+        }
+
         const filteredData = rawPeriodData.filter(d => {
             const matchesSearch = !filtSearch || (d.cliente.toLowerCase().includes(filtSearch) || d.numeroNota.includes(filtSearch));
             const matchesFilial = !filtFilial || d.filial === filtFilial;
-            const matchesNatureza = !filtNatureza || d.naturezaOperacao === filtNatureza;
-            const matchesVendedor = !filtVendedor || d.vendedor === filtVendedor;
+            const matchesNatureza = !filtNatureza || (d.naturezaOperacao && d.naturezaOperacao.toUpperCase().includes(filtNatureza.toUpperCase()));
+            
+            // Filtro hierárquico: se houver drilldown (ranking), ele ganha do filtro lateral se estiver ativo
+            const effectiveVendedor = this.drilldownFilter ? this.drilldownFilter.value : filtVendedor;
+            const matchesVendedor = !effectiveVendedor || d.vendedor === effectiveVendedor;
+            
             const matchesEstado = !filtEstado || d.estado === filtEstado;
             const matchesFrete = filtFrete === 'all' || (filtFrete === 'with' ? d.valorFrete > 0 : d.valorFrete === 0);
             const matchesDifal = filtDifal === 'all' || (filtDifal === 'with' ? (d.difal > 0) : true);
             return matchesSearch && matchesFilial && matchesNatureza && matchesVendedor && matchesEstado && matchesFrete && matchesDifal;
         });
 
-        const billed = filteredData.filter(d => !d.isCanceled && d.isRevenue);
+        const billed = filteredData.filter(d => {
+            if (d.isCanceled) return false;
+            if (d.isExit === false) return false; // REGRA DE OURO: Se é entrada, nunca entra no faturamento
+            
+            // Se já tem flag isRevenue, respeita. Se não, tenta descobrir (fallback para dados antigos)
+            const nat = (d.naturezaOperacao || "").toUpperCase();
+            if (nat.includes("RETORNO") || nat.includes("DEVOLU")) return false;
+            
+            if (d.isRevenue === true) return true;
+            return (nat.includes("VENDA") || nat.includes("LOCA") || nat.includes("SAIDA"));
+        });
         const total = billed.reduce((sum, d) => sum + d.valorFaturado, 0);
         
         // TODAY'S KPI
@@ -1176,20 +1576,51 @@ class NfeReportGenerator extends HTMLElement {
         const billedToday = billed.filter(d => d.dataEmissao === todayStr);
         const totalToday = billedToday.reduce((sum, d) => sum + d.valorFaturado, 0);
 
-        shadow.getElementById('kpi-today').textContent = this.formatCurrency(totalToday);
-        shadow.getElementById('kpi-today-sub').textContent = `${billedToday.length} resultados filtrados hoje`;
+        const elToday = shadow.getElementById('kpi-today');
+        if (elToday) elToday.textContent = this.formatCurrency(totalToday);
         
         shadow.getElementById('kpi-faturado').textContent = this.formatCurrency(total);
         
         const goal = parseFloat(localStorage.getItem('mci_bi_goal')) || 0;
+        const nowLocal = new Date();
+        const monthEnd = new Date(parseInt(selYear), parseInt(selMonth), 0).getDate();
+        
+        // CÁLCULO DE VELOCIDADE (DIAS CORRIDOS)
+        let daysPassed = monthEnd; // Default para meses passados
+        if (selMonth === String(nowLocal.getMonth() + 1).padStart(2, '0') && selYear === String(nowLocal.getFullYear())) {
+            daysPassed = nowLocal.getDate();
+        }
+        
+        const dailyVelocity = total / Math.max(1, daysPassed);
+        const forecast = dailyVelocity * monthEnd;
+
+        const elVelocity = shadow.getElementById('kpi-velocity-daily');
+        if (elVelocity) elVelocity.textContent = `${this.formatCurrency(dailyVelocity)}/dia`;
+        
+        const elForecast = shadow.getElementById('kpi-forecast');
+        if (elForecast) elForecast.textContent = this.formatCurrency(forecast);
+        
+        // TOTALIZADORES OPERACIONAIS (Frete/Difal)
+        const totalFrete = filteredData.reduce((sum, d) => sum + (d.valorFrete || 0), 0);
+        const totalDifal = filteredData.reduce((sum, d) => sum + (d.difal || 0), 0);
+
+        const elFrete = shadow.getElementById('kpi-frete');
+        if (elFrete) elFrete.textContent = this.formatCurrency(totalFrete);
+        
+        const elDifal = shadow.getElementById('kpi-difal');
+        if (elDifal) elDifal.textContent = this.formatCurrency(totalDifal);
+
         if (goal > 0) {
             const percent = (total / goal) * 100;
             shadow.getElementById('kpi-percentage').textContent = `${percent.toFixed(1)}%`;
+            shadow.getElementById('kpi-progress-bar').style.width = `${Math.min(100, percent)}%`;
             
-            const day = (periodKey === now.toISOString().substring(0, 7)) ? now.getDate() : 30;
-            const daysInMonth = (periodKey === now.toISOString().substring(0, 7)) ? new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() : 30;
-            const forecast = (total / day) * daysInMonth;
-            shadow.getElementById('kpi-forecast').textContent = this.formatCurrency(forecast);
+            const forecastPercent = (forecast / goal) * 100;
+            shadow.getElementById('kpi-forecast-sub').textContent = `Tendência: ${forecastPercent.toFixed(1)}% da meta de ${this.formatCurrency(goal)}`;
+        } else {
+            shadow.getElementById('kpi-percentage').textContent = '0%';
+            shadow.getElementById('kpi-progress-bar').style.width = '0%';
+            shadow.getElementById('kpi-forecast-sub').textContent = 'Defina uma meta na Controladoria';
         }
 
         // SEMPRE ATUALIZA O SEGUNDO PLANO (Ranking e Charts)
@@ -1212,21 +1643,21 @@ class NfeReportGenerator extends HTMLElement {
         const currentV = vSelect.value;
         const currentE = eSelect.value;
 
-        const filiais = [...new Set(data.map(d => d.filial))].sort();
-        const vendedores = [...new Set(data.map(d => d.vendedor))].sort();
+        const defaultFiliais = ['MATRIZ (CE)', 'FILIAL (SC)', 'FILIAL (SP)'];
+        const filiaisSet = new Set([...defaultFiliais, ...data.map(d => d.filial)]);
+        const filiais = [...filiaisSet].filter(f => f && f !== 'N/A').sort();
+
+        const vendedores = [...new Set(data.map(d => d.vendedor))].filter(v => v && v !== 'NAO ATRIBUIDO').sort();
         const estados = [...new Set(data.map(d => d.estado))].filter(Boolean).sort();
 
         // Update branch filter
-        if (fSelect.children.length - 1 !== filiais.length) {
-            fSelect.innerHTML = '<option value="">Todas Unidades</option>' + filiais.map(f => `<option value="${f}" ${f === currentF ? 'selected' : ''}>${escapeHTML(f)}</option>`).join('');
-        }
+        fSelect.innerHTML = '<option value="">Todas Unidades</option>' + filiais.map(f => `<option value="${f}" ${f === currentF ? 'selected' : ''}>${escapeHTML(f)}</option>`).join('');
+        
         // Update vendor filter
-        if (vSelect.children.length - 1 !== vendedores.length) {
-            vSelect.innerHTML = '<option value="">Todos Vendedores</option>' + vendedores.map(v => `<option value="${v}" ${v === currentV ? 'selected' : ''}>${escapeHTML(v)}</option>`).join('');
-        }
-        if (eSelect.children.length - 1 !== estados.length) {
-            eSelect.innerHTML = '<option value="">Todos os Estados</option>' + estados.map(e => `<option value="${e}" ${e === currentE ? 'selected' : ''}>${escapeHTML(e)}</option>`).join('');
-        }
+        vSelect.innerHTML = '<option value="">Todos Vendedores</option>' + vendedores.map(v => `<option value="${v}" ${v === currentV ? 'selected' : ''}>${escapeHTML(v)}</option>`).join('');
+        
+        // Update state filter
+        eSelect.innerHTML = '<option value="">Todos os Estados</option>' + estados.map(e => `<option value="${e}" ${e === currentE ? 'selected' : ''}>${escapeHTML(e)}</option>`).join('');
     }
 
     renderCharts(data) {
@@ -1323,6 +1754,59 @@ class NfeReportGenerator extends HTMLElement {
                 }
             }
         });
+        // Evolução Mensal (Novo Gráfico)
+        const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        const monthlyData = new Array(12).fill(0);
+        const monthlyPrevious = new Array(12).fill(0); 
+
+        // Usa todos os dados disponíveis (não apenas o mês filtrado) para o gráfico histórico
+        this.reportData.forEach(d => {
+            if (d.isCanceled || d.isExit === false) return;
+            const date = new Date(d.dataEmissao);
+            if (isNaN(date.getTime())) return;
+            const month = date.getMonth();
+            const year = date.getFullYear();
+            
+            if (year === 2026) monthlyData[month] += d.valorFaturado;
+            else monthlyPrevious[month] += d.valorFaturado;
+        });
+
+        const canvasEvo = shadow.getElementById('evolutionChart');
+        if (canvasEvo) {
+            const ctxEvo = canvasEvo.getContext('2d');
+            if (this.evolutionChart) this.evolutionChart.destroy();
+            this.evolutionChart = new Chart(ctxEvo, {
+                type: 'bar',
+                data: {
+                    labels: months,
+                    datasets: [
+                        {
+                            label: 'Faturamento 2026',
+                            data: monthlyData,
+                            backgroundColor: '#34a85a',
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'Histórico Anterior',
+                            data: monthlyPrevious,
+                            backgroundColor: '#6495ed',
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { font: { weight: '600' } } } },
+                    scales: {
+                        y: { 
+                            beginAtZero: true,
+                            ticks: { callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k' : v }
+                        },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
     }
 
     renderRanking(data) {
@@ -1334,9 +1818,9 @@ class NfeReportGenerator extends HTMLElement {
         });
         const sorted = Object.keys(perf).sort((a,b) => perf[b] - perf[a]);
         this.shadowRoot.getElementById('ranking-container').innerHTML = sorted.map((v, i) => `
-            <div style="display:flex; justify-content:space-between; align-items: center; padding: 1.5rem 0; border-bottom:1px solid #f1f5f9;">
+            <div class="ranking-item" data-vendedor="${v}" style="display:flex; justify-content:space-between; align-items: center; padding: 1.2rem 1rem; border-bottom:1px solid #f1f5f9; cursor: pointer; transition: all 0.3s; border-radius: 12px; margin-bottom: 4px;">
                 <div style="display:flex; align-items:center; gap: 15px;">
-                    <div style="width: 32px; height: 32px; background: ${i === 0 ? '#0d9488' : '#f1f5f9'}; color: ${i === 0 ? 'white' : '#64748b'}; border-radius: 10px; display: grid; place-items: center; font-weight: 800; font-size: 0.8rem;">
+                    <div style="width: 32px; height: 32px; background: ${i === 0 ? 'var(--primary)' : '#f1f5f9'}; color: ${i === 0 ? 'white' : '#64748b'}; border-radius: 10px; display: grid; place-items: center; font-weight: 800; font-size: 0.8rem;">
                         ${i+1}
                     </div>
                     <strong>${escapeHTML(v)}</strong>
@@ -1344,29 +1828,59 @@ class NfeReportGenerator extends HTMLElement {
                 <span style="font-weight:900; color:#0f172a; font-family: 'Outfit', sans-serif;">${this.formatCurrency(perf[v])}</span>
             </div>
         `).join('');
+
+        // BIND DRILLDOWN EVENTS (SUPER UX)
+        this.shadowRoot.querySelectorAll('.ranking-item').forEach(item => {
+            item.addEventListener('click', () => {
+                this.drilldownFilter = { type: 'vendedor', value: item.dataset.vendedor };
+                this.updateUI();
+                this.shadowRoot.getElementById('view-dashboard').scrollIntoView({ behavior: 'smooth' });
+            });
+            item.addEventListener('mouseenter', () => { item.style.background = '#f8fafc'; item.style.transform = 'scale(1.02)'; });
+            item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; item.style.transform = 'scale(1)'; });
+        });
     }
 
     renderTable(data = this.reportData) {
         const container = this.shadowRoot.getElementById('table-container');
         let html = `
-            <table style="width:100%; border-collapse: collapse;">
+            <table>
                 <thead>
-                    <tr style="text-align: left; background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
-                        <th style="padding: 1rem; width: 100px;">Nota</th>
-                        <th style="padding: 1rem; width: 110px;">Data</th>
-                        <th style="padding: 1rem;">Cliente</th>
-                        <th style="padding: 1rem;">Vendedor (Editável)</th>
-                        <th style="padding: 1rem;">Natureza</th>
-                    <th style="padding: 1rem;">Pagamento</th>
-                        <th style="padding: 1rem; text-align:right;">Valor</th>
+                    <tr>
+                        <th>Nota</th>
+                        <th>Data</th>
+                        <th>Cliente</th>
+                        <th>Vendedor (Edit)</th>
+                        <th>Natureza</th>
+                        <th>Logística</th>
+                        <th>Fisco</th>
+                        <th style="text-align:right;">Valor</th>
                     </tr>
                 </thead>
                 <tbody>
         `;
         
-        data.sort((a,b) => b.dataEmissao.localeCompare(a.dataEmissao)).forEach((d, idx) => {
+        if (data.length === 0) {
             html += `
-                <tr style="border-bottom: 1px solid #f1f5f9; ${d.isCanceled ? 'opacity:0.5; color:red; text-decoration:line-through;' : ''}">
+                <tr>
+                    <td colspan="8" style="padding: 4rem 2rem; text-align: center;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+                        <div style="font-size: 1.1rem; font-weight: 800; color: #64748b;">Nenhuma nota encontrada para este filtro ou período.</div>
+                        <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 5px;">Tente mudar o mês ou ano no menu lateral ou importe novos arquivos.</div>
+                    </td>
+                </tr>
+            `;
+        }
+        
+        data.sort((a,b) => b.dataEmissao.localeCompare(a.dataEmissao)).forEach((d, idx) => {
+            const isDemo = d.isDemo || (d.naturezaOperacao && d.naturezaOperacao.toUpperCase().includes("DEMONSTRA"));
+            const rowStyle = `
+                border-bottom: 1px solid #f1f5f9; 
+                ${d.isCanceled ? 'opacity:0.5; color:red; text-decoration:line-through;' : ''}
+                ${isDemo ? 'background: rgba(245, 158, 11, 0.05);' : ''}
+            `;
+            html += `
+                <tr style="${rowStyle}">
                     <td style="padding: 1rem; width: 100px;"><strong>#${escapeHTML(d.numeroNota)}</strong></td>
                     <td style="padding: 1rem; width: 110px;">${d.dataEmissao.split('-').reverse().join('/')}</td>
                     <td style="padding: 1rem;">
@@ -1394,12 +1908,28 @@ class NfeReportGenerator extends HTMLElement {
                     </td>
                     <td style="padding: 1rem;">
                         <div style="display:flex; flex-direction: column; gap: 4px; align-items: flex-start;">
-                            <span style="font-size: 0.7rem; background: #fff7ed; color: #9a3412; padding: 4px 8px; border-radius: 6px; font-weight: 800; border: 1px solid #ffedd5;">
-                                ${escapeHTML(d.naturezaOperacao)}
-                            </span>
-                            ${!d.isExit ? `
-                                <span style="font-size: 0.6rem; background: #f1f5f9; color: #475569; padding: 2px 6px; border-radius: 4px; font-weight: 900; text-transform: uppercase;">
-                                    📥 Entrada (Sem Receita)
+                            <select class="edit-natureza" 
+                                    data-idx="${this.reportData.indexOf(d)}" 
+                                    style="padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.75rem; font-weight: 800; width: 100%; cursor: pointer;">
+                                <option value="VENDAS CONTRIBUINTES" ${d.naturezaOperacao === 'VENDAS CONTRIBUINTES' ? 'selected' : ''}>Vendas Contribuintes</option>
+                                <option value="VENDAS NÃO CONTRIBUINTES" ${d.naturezaOperacao === 'VENDAS NÃO CONTRIBUINTES' ? 'selected' : ''}>Vendas Não Contribuintes</option>
+                                <option value="SAÍDA DE LOCAÇÃO" ${d.naturezaOperacao === 'SAÍDA DE LOCAÇÃO' ? 'selected' : ''}>Saída de Locação</option>
+                                <option value="RETORNO DE LOCAÇÃO" ${d.naturezaOperacao === 'RETORNO DE LOCAÇÃO' ? 'selected' : ''}>Retorno de Locação</option>
+                                <option value="TRANSFERÊNCIA" ${d.naturezaOperacao === 'TRANSFERÊNCIA' ? 'selected' : ''}>Transferência</option>
+                                <option value="AMOSTRA/BRINDE" ${d.naturezaOperacao === 'AMOSTRA/BRINDE' ? 'selected' : ''}>Amostra/Brinde</option>
+                                <option value="DEVOLUÇÃO" ${d.naturezaOperacao === 'DEVOLUÇÃO' ? 'selected' : ''}>Devolução / Estorno</option>
+                                <option value="OUTROS" ${d.naturezaOperacao === 'OUTROS' ? 'selected' : ''}>Outras Operações</option>
+                            </select>
+
+                             ${d.isExit === false ? `
+                                <span style="font-size: 0.6rem; background: #334155; color: white; padding: 2px 6px; border-radius: 4px; font-weight: 900; text-transform: uppercase; margin-top: 4px;">
+                                    ⚠️ ENTRADA (SEM RECEITA)
+                                </span>
+                            ` : ''}
+                            
+                            ${isDemo ? `
+                                <span style="font-size: 0.6rem; background: #f59e0b; color: white; padding: 2px 6px; border-radius: 4px; font-weight: 900; text-transform: uppercase; margin-top: 4px; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.2);">
+                                    📦 DEMONSTRAÇÃO
                                 </span>
                             ` : ''}
                         </div>
@@ -1414,7 +1944,7 @@ class NfeReportGenerator extends HTMLElement {
                             </span>
                         </div>
                     </td>
-                    <td style="padding: 1rem; text-align:right; font-weight:800; font-size: 1.1rem; color: #0d8377;">
+                    <td style="padding: 1rem; text-align:right; font-weight:800; font-size: 1.1rem; color: ${ (d.isExit !== false && !d.isCanceled && (d.isRevenue || ( (d.naturezaOperacao||"").toUpperCase().includes("VENDA") || (d.naturezaOperacao||"").toUpperCase().includes("LOCA") ) ) && !( (d.naturezaOperacao||"").toUpperCase().includes("RETORNO") || (d.naturezaOperacao||"").toUpperCase().includes("DEVOLU") ) ) ? '#0d8377' : '#94a3b8'};">
                         ${this.formatCurrency(d.valorFaturado)}
                     </td>
                 </tr>`;
@@ -1423,27 +1953,43 @@ class NfeReportGenerator extends HTMLElement {
         html += '</tbody></table>';
         container.innerHTML = html;
 
-        // BIND EDIT EVENTS
+        // BIND EDIT EVENTS (VENDOR)
         container.querySelectorAll('.edit-vendedor').forEach(input => {
             input.addEventListener('change', async (e) => {
                 const idx = e.target.getAttribute('data-idx');
                 const newVal = e.target.value;
                 this.reportData[idx].vendedor = newVal;
-                
-                this.showToast('Atualizando vendedor...', 'info');
-                try {
-                    await DatabaseService.syncToSupabase([this.reportData[idx]]);
-                    this.showToast('Vendedor atualizado com sucesso!', 'success');
-                    // Backup local
-                    localStorage.setItem('mci_last_data', JSON.stringify(this.reportData));
-                    
-                    // ATUALIZAÇÃO EM TEMPO REAL: Recalcula o ranking e KPIs sem dar "pulo" na tela
-                    this.updateUI(true);
-                } catch (err) {
-                    this.showToast('Erro ao sincronizar alteração.', 'error');
-                }
+                this.syncSingleChange(idx);
             });
         });
+
+        // BIND EDIT EVENTS (NATUREZA)
+        container.querySelectorAll('.edit-natureza').forEach(input => {
+            input.addEventListener('change', async (e) => {
+                const idx = e.target.getAttribute('data-idx');
+                const newVal = e.target.value;
+                this.reportData[idx].naturezaOperacao = newVal;
+                
+                // Se mudou para Retorno ou Devolução, força isRevenue como false por segurança
+                if (newVal.includes('RETORNO') || newVal.includes('DEVOLUÇÃO')) {
+                    this.reportData[idx].isRevenue = false;
+                }
+                
+                this.syncSingleChange(idx);
+            });
+        });
+    }
+
+    async syncSingleChange(idx) {
+        this.showToast('Atualizando dados...', 'info');
+        try {
+            await DatabaseService.syncToSupabase([this.reportData[idx]]);
+            this.showToast('Registro atualizado com sucesso!', 'success');
+            localStorage.setItem('mci_last_data', JSON.stringify(this.reportData));
+            this.updateUI(true);
+        } catch (err) {
+            this.showToast('Erro ao sincronizar alteração.', 'error');
+        }
     }
 
     async syncCloud() {
